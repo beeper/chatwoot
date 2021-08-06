@@ -5,19 +5,19 @@ import (
 	mid "maunium.net/go/mautrix/id"
 )
 
-func (store *StateStore) GetChatwootConversationFromMatrixRoom(roomID mid.RoomID) (string, error) {
+func (store *StateStore) GetChatwootConversationFromMatrixRoom(roomID mid.RoomID) (int, error) {
 	row := store.DB.QueryRow(`
 		SELECT chatwoot_conversation_id
 		  FROM chatwoot_conversation_to_matrix_room
 		 WHERE matrix_room_id = ?`, roomID)
-	var chatwootConversationId string
+	var chatwootConversationId int
 	if err := row.Scan(&chatwootConversationId); err != nil {
-		return "", err
+		return -1, err
 	}
 	return chatwootConversationId, nil
 }
 
-func (store *StateStore) GetMatrixRoomFromChatwootConversation(conversationID string) (mid.RoomID, error) {
+func (store *StateStore) GetMatrixRoomFromChatwootConversation(conversationID int) (mid.RoomID, error) {
 	row := store.DB.QueryRow(`
 		SELECT matrix_room_id
 		  FROM chatwoot_conversation_to_matrix_room
@@ -29,7 +29,7 @@ func (store *StateStore) GetMatrixRoomFromChatwootConversation(conversationID st
 	return mid.RoomID(roomID), nil
 }
 
-func (store *StateStore) UpdateConversationIdForRoom(roomID mid.RoomID, conversationID string) error {
+func (store *StateStore) UpdateConversationIdForRoom(roomID mid.RoomID, conversationID int) error {
 	log.Debug("Upserting row into chatwoot_conversation_to_matrix_room")
 	tx, err := store.DB.Begin()
 	if err != nil {

@@ -2,5 +2,6 @@
     "Homeserver": "https://matrix.example.com",
     "Username": "@help:example.com",
     "PasswordFile": "/path/to/password/file",
-    "ChatwootAccessTokenFile": "/path/to/chatwoot/access/file"
+    "ChatwootAccessTokenFile": "/path/to/chatwoot/access/file",
+    "ChatwootInboxID": 123
 }

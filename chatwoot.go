@@ -135,16 +135,6 @@ func main() {
 	// set the client store on the client.
 	client.Store = stateStore
 
-	joinedRooms, err := client.JoinedRooms()
-	if err == nil {
-		for _, roomID := range joinedRooms.JoinedRooms {
-			_, err := stateStore.GetChatwootConversationFromMatrixRoom(roomID)
-			if err != nil {
-				log.Info("need to create a chatwoot conversation for ", roomID)
-			}
-		}
-	}
-
 	// Setup the crypto store
 	sqlCryptoStore := mcrypto.NewSQLCryptoStore(
 		db,

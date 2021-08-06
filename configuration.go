@@ -13,6 +13,7 @@ type Configuration struct {
 	Username                string
 	PasswordFile            string
 	ChatwootAccessTokenFile string
+	ChatwootInboxID         int
 }
 
 func (c *Configuration) GetPassword() (string, error) {

@@ -11,11 +11,15 @@ import (
 
 func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
-	var mc chatwootapi.MessageCreatedEvent
+	var mc chatwootapi.MessageCreated
 	err := decoder.Decode(&mc)
 	if err != nil {
 		log.Warn(err)
 		return
 	}
-	log.Info(mc)
+	roomID, err := stateStore.GetMatrixRoomFromChatwootConversation(mc.Conversation.ID)
+	if err != nil {
+		log.Info("No room")
+	}
+	log.Info("room", roomID)
 }

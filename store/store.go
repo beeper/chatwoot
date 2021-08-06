@@ -51,7 +51,7 @@ func (store *StateStore) CreateTables() error {
 		`
 		CREATE TABLE IF NOT EXISTS chatwoot_conversation_to_matrix_room (
 			matrix_room_id            VARCHAR(255),
-			chatwoot_conversation_id  VARCHAR(255),
+			chatwoot_conversation_id  INTEGER,
 			PRIMARY KEY (matrix_room_id, chatwoot_conversation_id)
 		)
 		`,
