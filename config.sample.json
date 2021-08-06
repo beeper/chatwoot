@@ -1,0 +1,5 @@
+{
+    "Homeserver": "https://matrix.example.com",
+    "Username": "@help:example.com",
+    "PasswordFile": "/path/to/password/file"
+}
