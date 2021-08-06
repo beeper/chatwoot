@@ -48,6 +48,13 @@ func (store *StateStore) CreateTables() error {
 			PRIMARY KEY (room_id, user_id)
 		)
 		`,
+		`
+		CREATE TABLE IF NOT EXISTS chatwoot_conversation_to_matrix_room (
+			matrix_room_id            VARCHAR(255),
+			chatwoot_conversation_id  VARCHAR(255),
+			PRIMARY KEY (matrix_room_id, chatwoot_conversation_id)
+		)
+		`,
 	}
 
 	for _, query := range queries {

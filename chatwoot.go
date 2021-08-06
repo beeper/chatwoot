@@ -4,9 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
@@ -69,6 +67,26 @@ func main() {
 	if err != nil {
 		log.Fatal("Could not open chatwoot database.")
 	}
+
+	// Make sure to exit cleanly
+	c := make(chan os.Signal, 1)
+	signal.Notify(c,
+		os.Interrupt,
+		os.Kill,
+		syscall.SIGABRT,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGQUIT,
+		syscall.SIGTERM,
+	)
+	go func() {
+		for range c { // when the process is killed
+			log.Info("Cleaning up")
+			db.Close()
+			os.Exit(0)
+		}
+	}()
+
 	stateStore = store.NewStateStore(db)
 	if err := stateStore.CreateTables(); err != nil {
 		log.Fatal("Failed to create the tables for chatwoot.", err)
@@ -117,24 +135,15 @@ func main() {
 	// set the client store on the client.
 	client.Store = stateStore
 
-	// Make sure to exit cleanly
-	c := make(chan os.Signal, 1)
-	signal.Notify(c,
-		os.Interrupt,
-		os.Kill,
-		syscall.SIGABRT,
-		syscall.SIGHUP,
-		syscall.SIGINT,
-		syscall.SIGQUIT,
-		syscall.SIGTERM,
-	)
-	go func() {
-		for range c { // when the process is killed
-			log.Info("Cleaning up")
-			db.Close()
-			os.Exit(0)
+	joinedRooms, err := client.JoinedRooms()
+	if err == nil {
+		for _, roomID := range joinedRooms.JoinedRooms {
+			_, err := stateStore.GetChatwootConversationFromMatrixRoom(roomID)
+			if err != nil {
+				log.Info("need to create a chatwoot conversation for ", roomID)
+			}
 		}
-	}()
+	}
 
 	// Setup the crypto store
 	sqlCryptoStore := mcrypto.NewSQLCryptoStore(
@@ -180,7 +189,6 @@ func main() {
 			}
 		} else if event.GetStateKey() == username.String() && event.Content.AsMember().Membership.IsLeaveOrBan() {
 			log.Infof("Left or banned from %s", event.RoomID)
-			stateStore.RemoveConfigRoom(event.RoomID)
 		} else {
 			roomMembers := stateStore.GetRoomMembers(event.RoomID)
 			if len(roomMembers) == 1 && roomMembers[0] == username {
@@ -223,18 +231,8 @@ func main() {
 		}
 	}()
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		responseData, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			return
-		}
-		log.Info(string(responseData))
-		fmt.Fprintf(w, "Chatwoot running")
-	})
-
-	http.HandleFunc("/webhook", func(w http.ResponseWriter, r *http.Request) {
-		log.Info(r.Body)
-	})
-
+	// Listen to the webhook
+	http.HandleFunc("/", HandleWebhook)
+	http.HandleFunc("/webhook", HandleWebhook)
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
