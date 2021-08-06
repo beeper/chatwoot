@@ -1,5 +1,6 @@
 {
     "Homeserver": "https://matrix.example.com",
     "Username": "@help:example.com",
-    "PasswordFile": "/path/to/password/file"
+    "PasswordFile": "/path/to/password/file",
+    "ChatwootAccessTokenFile": "/path/to/chatwoot/access/file"
 }

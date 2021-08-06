@@ -4,3 +4,4 @@ config*.json
 .direnv
 standupbot
 passwordfile
+accesstokenfile

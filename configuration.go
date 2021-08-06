@@ -9,9 +9,10 @@ import (
 
 type Configuration struct {
 	// Authentication settings
-	Homeserver   string
-	Username     string
-	PasswordFile string
+	Homeserver              string
+	Username                string
+	PasswordFile            string
+	ChatwootAccessTokenFile string
 }
 
 func (c *Configuration) GetPassword() (string, error) {

@@ -4,7 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -190,29 +193,48 @@ func main() {
 	})
 
 	syncer.OnEventType(mevent.StateEncryption, func(_ mautrix.EventSource, event *mevent.Event) { stateStore.SetEncryptionEvent(event) })
-
-	syncer.OnEventType(mevent.EventReaction, func(source mautrix.EventSource, event *mevent.Event) {
-		log.Debug(event)
-	})
-
-	syncer.OnEventType(mevent.EventMessage, func(source mautrix.EventSource, event *mevent.Event) { log.Debug(event) })
-
-	syncer.OnEventType(mevent.EventRedaction, func(source mautrix.EventSource, event *mevent.Event) { log.Debug(event) })
-
+	syncer.OnEventType(mevent.EventReaction, func(source mautrix.EventSource, event *mevent.Event) { go HandleReaction(source, event) })
+	syncer.OnEventType(mevent.EventMessage, func(source mautrix.EventSource, event *mevent.Event) { go HandleMessage(source, event) })
+	syncer.OnEventType(mevent.EventRedaction, func(source mautrix.EventSource, event *mevent.Event) { go HandleRedaction(source, event) })
 	syncer.OnEventType(mevent.EventEncrypted, func(source mautrix.EventSource, event *mevent.Event) {
 		decryptedEvent, err := olmMachine.DecryptMegolmEvent(event)
 		if err != nil {
 			log.Warn("Failed to decrypt: ", err)
 		} else {
 			log.Debug("Received encrypted event: ", decryptedEvent.Content.Raw)
+			if decryptedEvent.Type == mevent.EventMessage {
+				go HandleMessage(source, decryptedEvent)
+			} else if decryptedEvent.Type == mevent.EventReaction {
+				go HandleReaction(source, decryptedEvent)
+			} else if decryptedEvent.Type == mevent.EventRedaction {
+				go HandleRedaction(source, decryptedEvent)
+			}
 		}
 	})
 
-	for {
-		log.Debugf("Running sync...")
-		err = client.Sync()
-		if err != nil {
-			log.Errorf("Sync failed. %+v", err)
+	// Start the sync loop
+	go func() {
+		for {
+			log.Debugf("Running sync...")
+			err = client.Sync()
+			if err != nil {
+				log.Errorf("Sync failed. %+v", err)
+			}
 		}
-	}
+	}()
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		responseData, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			return
+		}
+		log.Info(string(responseData))
+		fmt.Fprintf(w, "Chatwoot running")
+	})
+
+	http.HandleFunc("/webhook", func(w http.ResponseWriter, r *http.Request) {
+		log.Info(r.Body)
+	})
+
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
