@@ -12,13 +12,24 @@ type Configuration struct {
 	Homeserver              string
 	Username                string
 	PasswordFile            string
+	ChatwootBaseUrl         string
 	ChatwootAccessTokenFile string
+	ChatwootAccountID       int
 	ChatwootInboxID         int
 }
 
 func (c *Configuration) GetPassword() (string, error) {
 	log.Debug("Reading password from ", c.PasswordFile)
 	buf, err := os.ReadFile(c.PasswordFile)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(buf)), nil
+}
+
+func (c *Configuration) GetChatwootAccessToken() (string, error) {
+	log.Debug("Reading access token from ", c.ChatwootAccessTokenFile)
+	buf, err := os.ReadFile(c.ChatwootAccessTokenFile)
 	if err != nil {
 		return "", err
 	}

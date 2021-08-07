@@ -13,17 +13,21 @@ import (
 	"github.com/kyoh86/xdg"
 	_ "github.com/mattn/go-sqlite3"
 	log "github.com/sirupsen/logrus"
-	"gitlab.com/beeper/chatwoot/store"
 	"maunium.net/go/mautrix"
 	mcrypto "maunium.net/go/mautrix/crypto"
 	mevent "maunium.net/go/mautrix/event"
 	mid "maunium.net/go/mautrix/id"
+
+	"gitlab.com/beeper/chatwoot/chatwootapi"
+	"gitlab.com/beeper/chatwoot/store"
 )
 
 var client *mautrix.Client
 var configuration Configuration
 var olmMachine *mcrypto.OlmMachine
 var stateStore *store.StateStore
+
+var chatwootApi *chatwootapi.ChatwootAPI
 
 var VERSION = "0.2.1"
 
@@ -134,6 +138,17 @@ func main() {
 
 	// set the client store on the client.
 	client.Store = stateStore
+
+	accessToken, err := configuration.GetChatwootAccessToken()
+	if err != nil {
+		log.Fatalf("Could not read access token from %s", configuration.ChatwootAccessTokenFile)
+	}
+	chatwootApi = chatwootapi.CreateChatwootAPI(
+		configuration.ChatwootBaseUrl,
+		configuration.ChatwootAccountID,
+		configuration.ChatwootInboxID,
+		accessToken,
+	)
 
 	// Setup the crypto store
 	sqlCryptoStore := mcrypto.NewSQLCryptoStore(
