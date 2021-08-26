@@ -9,13 +9,14 @@ import (
 
 type Configuration struct {
 	// Authentication settings
-	Homeserver              string
-	Username                string
-	PasswordFile            string
-	ChatwootBaseUrl         string
-	ChatwootAccessTokenFile string
-	ChatwootAccountID       int
-	ChatwootInboxID         int
+	Homeserver                               string
+	Username                                 string
+	PasswordFile                             string
+	ChatwootBaseUrl                          string
+	ChatwootAccessTokenFile                  string
+	ChatwootAccountID                        int
+	ChatwootInboxID                          int
+	AllowMessagesFromUsersOnOtherHomeservers bool
 }
 
 func (c *Configuration) GetPassword() (string, error) {

@@ -28,6 +28,7 @@ var olmMachine *mcrypto.OlmMachine
 var stateStore *store.StateStore
 
 var chatwootApi *chatwootapi.ChatwootAPI
+var botHomeserver string
 
 var VERSION = "0.2.1"
 
@@ -63,8 +64,17 @@ func main() {
 		log.Fatalf("Could not read config from %s: %s", *configPath, err)
 	}
 
+	configuration = Configuration{
+		AllowMessagesFromUsersOnOtherHomeservers: false, // default to false
+		ChatwootBaseUrl: "https://app.chatwoot.com/",
+	}
+
 	err = json.Unmarshal(configJson, &configuration)
 	username := mid.UserID(configuration.Username)
+	_, botHomeserver, err = username.Parse()
+	if err != nil {
+		log.Fatal("Couldn't parse username")
+	}
 
 	// Open the config database
 	db, err := sql.Open("sqlite3", xdg.DataHome()+"/chatwoot/chatwoot.db")
@@ -206,10 +216,26 @@ func main() {
 	})
 
 	syncer.OnEventType(mevent.StateEncryption, func(_ mautrix.EventSource, event *mevent.Event) { stateStore.SetEncryptionEvent(event) })
-	syncer.OnEventType(mevent.EventReaction, func(source mautrix.EventSource, event *mevent.Event) { go HandleReaction(source, event) })
-	syncer.OnEventType(mevent.EventMessage, func(source mautrix.EventSource, event *mevent.Event) { go HandleMessage(source, event) })
-	syncer.OnEventType(mevent.EventRedaction, func(source mautrix.EventSource, event *mevent.Event) { go HandleRedaction(source, event) })
+	syncer.OnEventType(mevent.EventReaction, func(source mautrix.EventSource, event *mevent.Event) {
+		if VerifyFromAuthorizedUser(event.Sender) {
+			go HandleReaction(source, event)
+		}
+	})
+	syncer.OnEventType(mevent.EventMessage, func(source mautrix.EventSource, event *mevent.Event) {
+		if VerifyFromAuthorizedUser(event.Sender) {
+			go HandleMessage(source, event)
+		}
+	})
+	syncer.OnEventType(mevent.EventRedaction, func(source mautrix.EventSource, event *mevent.Event) {
+		if VerifyFromAuthorizedUser(event.Sender) {
+			go HandleRedaction(source, event)
+		}
+	})
 	syncer.OnEventType(mevent.EventEncrypted, func(source mautrix.EventSource, event *mevent.Event) {
+		if !VerifyFromAuthorizedUser(event.Sender) {
+			return
+		}
+
 		decryptedEvent, err := olmMachine.DecryptMegolmEvent(event)
 		if err != nil {
 			log.Warn("Failed to decrypt: ", err)
@@ -240,4 +266,16 @@ func main() {
 	http.HandleFunc("/", HandleWebhook)
 	http.HandleFunc("/webhook", HandleWebhook)
 	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+func VerifyFromAuthorizedUser(sender mid.UserID) bool {
+	if configuration.AllowMessagesFromUsersOnOtherHomeservers {
+		return true
+	}
+	_, homeserver, err := sender.Parse()
+	if err != nil {
+		return false
+	}
+
+	return botHomeserver == homeserver
 }
