@@ -58,6 +58,11 @@ func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Skip private messages
+	if mc.Private {
+		return
+	}
+
 	if eventID, err := stateStore.GetMatrixEventIdForChatwootMessage(mc.ID); err == nil {
 		log.Info("Chatwoot message with ID ", mc.ID, " already has a Matrix Event ID ", eventID)
 		return
