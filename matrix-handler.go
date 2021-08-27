@@ -23,17 +23,16 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 	conversationID, err := stateStore.GetChatwootConversationFromMatrixRoom(event.RoomID)
 	if err != nil {
 		createRoomLock.Lock()
-		email, err := GetEmailForUser(event.Sender)
+		log.Errorf("Chatwoot conversation not found for %s: %s", event.RoomID, err)
+		contactID, err := chatwootApi.ContactIDForMxid(event.Sender)
 		if err != nil {
-			// TODO do something smart here
-			log.Error("Email not found for user: ", event.Sender)
-			return
-		}
+			log.Errorf("Contact ID not found for user with MXID: %s. Error: %s", event.Sender, err)
 
-		contactID, err := chatwootApi.ContactIDWithEmail(email)
-		if err != nil {
-			log.Error("Contact ID not found for user with email: ", email)
-			return
+			contactID, err = chatwootApi.CreateContact(event.Sender)
+			if err != nil {
+				log.Errorf("Create contact failed for %s: %s", event.Sender, err)
+				return
+			}
 		}
 		conversation, err := chatwootApi.CreateConversation(event.RoomID.String(), contactID)
 		if err != nil {
