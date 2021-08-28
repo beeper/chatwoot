@@ -13,6 +13,7 @@ import (
 	"path"
 
 	log "github.com/sirupsen/logrus"
+	mid "maunium.net/go/mautrix/id"
 )
 
 type ChatwootAPI struct {
@@ -49,7 +50,42 @@ func (api *ChatwootAPI) MakeUri(endpoint string) string {
 	return url.String()
 }
 
-func (api *ChatwootAPI) ContactIDWithEmail(email string) (int, error) {
+func (api *ChatwootAPI) CreateContact(userID mid.UserID) (int, error) {
+	log.Info("Creating contact for ", userID)
+	payload := CreateContactPayload{
+		InboxID:    api.InboxID,
+		Name:       userID.String(),
+		Email:      userID.String(),
+		Identifier: userID.String(),
+	}
+	jsonValue, _ := json.Marshal(payload)
+	req, err := http.NewRequest(http.MethodPost, api.MakeUri("contacts"), bytes.NewBuffer(jsonValue))
+	if err != nil {
+		log.Error(err)
+		return 0, err
+	}
+
+	resp, err := api.DoRequest(req)
+	if err != nil {
+		log.Error(err)
+		return 0, err
+	}
+	if resp.StatusCode != 200 {
+		return 0, errors.New(fmt.Sprintf("POST contacts returned non-200 status code: %d", resp.StatusCode))
+	}
+
+	decoder := json.NewDecoder(resp.Body)
+	var contactPayload ContactPayload
+	err = decoder.Decode(&contactPayload)
+	if err != nil {
+		return 0, err
+	}
+
+	log.Debug(contactPayload)
+	return contactPayload.Payload.Contact.ID, nil
+}
+
+func (api *ChatwootAPI) ContactIDForMxid(userID mid.UserID) (int, error) {
 	req, err := http.NewRequest(http.MethodGet, api.MakeUri("contacts/search"), nil)
 	if err != nil {
 		log.Error(err)
@@ -57,8 +93,7 @@ func (api *ChatwootAPI) ContactIDWithEmail(email string) (int, error) {
 	}
 
 	q := req.URL.Query()
-	q.Add("q", email)
-	q.Add("sort", "email")
+	q.Add("q", userID.String())
 	req.URL.RawQuery = q.Encode()
 
 	resp, err := api.DoRequest(req)
@@ -77,12 +112,12 @@ func (api *ChatwootAPI) ContactIDWithEmail(email string) (int, error) {
 		return 0, err
 	}
 	for _, contact := range contactsPayload.Payload {
-		if contact.Email == email {
+		if contact.Identifier == userID.String() {
 			return contact.ID, nil
 		}
 	}
 
-	return 0, errors.New("Couldn't find user with email!")
+	return 0, errors.New(fmt.Sprintf("Couldn't find user with user ID %s!", userID))
 }
 
 func (api *ChatwootAPI) CreateConversation(sourceID string, contactID int) (*Conversation, error) {

@@ -2,12 +2,29 @@ package chatwootapi
 
 // Contact
 type Contact struct {
-	ID    int    `json:"id"`
-	Email string `json:"email"`
+	ID         int    `json:"id"`
+	Email      string `json:"email"`
+	Identifier string `json:"identifier"`
 }
 
 type ContactsPayload struct {
 	Payload []Contact `json:"payload"`
+}
+
+type ContactPayloadInner struct {
+	Contact Contact `json:"contact"`
+}
+
+type ContactPayload struct {
+	Payload ContactPayloadInner `json:"payload"`
+}
+
+type CreateContactPayload struct {
+	InboxID     int    `json:"inbox_id"`
+	Name        string `json:"name"`
+	Email       string `json:"email"`
+	PhoneNumber string `json:"phone_number"`
+	Identifier  string `json:"identifier"`
 }
 
 // Attachment
