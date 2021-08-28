@@ -11,6 +11,14 @@ type ContactsPayload struct {
 	Payload []Contact `json:"payload"`
 }
 
+type ContactPayloadInner struct {
+	Contact Contact `json:"contact"`
+}
+
+type ContactPayload struct {
+	Payload ContactPayloadInner `json:"payload"`
+}
+
 type CreateContactPayload struct {
 	InboxID     int    `json:"inbox_id"`
 	Name        string `json:"name"`

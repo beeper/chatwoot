@@ -31,12 +31,15 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 			contactID, err = chatwootApi.CreateContact(event.Sender)
 			if err != nil {
 				log.Errorf("Create contact failed for %s: %s", event.Sender, err)
+				createRoomLock.Unlock()
 				return
 			}
+			log.Infof("Contact with ID %d created", contactID)
 		}
 		conversation, err := chatwootApi.CreateConversation(event.RoomID.String(), contactID)
 		if err != nil {
 			log.Error("Failed to create chatwoot conversation for ", event.RoomID)
+			createRoomLock.Unlock()
 			return
 		}
 

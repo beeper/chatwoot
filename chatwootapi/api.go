@@ -55,6 +55,7 @@ func (api *ChatwootAPI) CreateContact(userID mid.UserID) (int, error) {
 	payload := CreateContactPayload{
 		InboxID:    api.InboxID,
 		Name:       userID.String(),
+		Email:      userID.String(),
 		Identifier: userID.String(),
 	}
 	jsonValue, _ := json.Marshal(payload)
@@ -74,14 +75,14 @@ func (api *ChatwootAPI) CreateContact(userID mid.UserID) (int, error) {
 	}
 
 	decoder := json.NewDecoder(resp.Body)
-	var contactPayload Contact
+	var contactPayload ContactPayload
 	err = decoder.Decode(&contactPayload)
 	if err != nil {
 		return 0, err
 	}
 
 	log.Debug(contactPayload)
-	return contactPayload.ID, nil
+	return contactPayload.Payload.Contact.ID, nil
 }
 
 func (api *ChatwootAPI) ContactIDForMxid(userID mid.UserID) (int, error) {
@@ -93,7 +94,6 @@ func (api *ChatwootAPI) ContactIDForMxid(userID mid.UserID) (int, error) {
 
 	q := req.URL.Query()
 	q.Add("q", userID.String())
-	q.Add("sort", "identifier")
 	req.URL.RawQuery = q.Encode()
 
 	resp, err := api.DoRequest(req)
