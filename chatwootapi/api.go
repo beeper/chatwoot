@@ -164,3 +164,22 @@ func (api *ChatwootAPI) DownloadAttachment(url string) ([]byte, error) {
 	}
 	return data, err
 }
+
+func (api *ChatwootAPI) DeleteMessage(conversationID int, messageID int) error {
+	req, err := http.NewRequest(http.MethodDelete, api.MakeUri(fmt.Sprintf("conversations/%d/messages/%d", conversationID, messageID)), nil)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+
+	resp, err := api.DoRequest(req)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	if resp.StatusCode != 200 {
+		return errors.New(fmt.Sprintf("GET attachment returned non-200 status code: %d", resp.StatusCode))
+	}
+
+	return nil
+}

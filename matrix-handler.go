@@ -55,4 +55,17 @@ func HandleReaction(_ mautrix.EventSource, event *mevent.Event) {
 }
 
 func HandleRedaction(_ mautrix.EventSource, event *mevent.Event) {
+	conversationID, err := stateStore.GetChatwootConversationFromMatrixRoom(event.RoomID)
+	if err != nil {
+		log.Warn("No Chatwoot conversation associated with ", event.RoomID)
+		return
+	}
+
+	messageID, err := stateStore.GetChatwootMessageIdForMatrixEventId(event.Redacts)
+	if err != nil {
+		log.Info("No Chatwoot message for Matrix event ", event.Redacts)
+		return
+	}
+
+	chatwootApi.DeleteMessage(conversationID, messageID)
 }

@@ -117,6 +117,12 @@ func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, eventID := range stateStore.GetMatrixEventIdsForChatwootMessage(mc.ID) {
+			event, err := client.GetEvent(roomID, eventID)
+			if err == nil && event.Unsigned.RedactedBecause != nil {
+				// Already redacted
+				log.Infof("Message %d was already redacted", mc.ID)
+				continue
+			}
 			client.RedactEvent(roomID, eventID)
 		}
 		return
