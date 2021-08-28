@@ -169,7 +169,7 @@ func (api *ChatwootAPI) SendAttachmentMessage(conversationID int, filename strin
 	}
 	messageTypeFieldWriter.Write([]byte("incoming"))
 
-	fileWriter, err := bodyWriter.CreateFormFile("attachments", filename)
+	fileWriter, err := bodyWriter.CreateFormFile("attachments[]", filename)
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -178,7 +178,6 @@ func (api *ChatwootAPI) SendAttachmentMessage(conversationID int, filename strin
 	// Copy the file data into the form.
 	io.Copy(fileWriter, fileData)
 
-	contentType := bodyWriter.FormDataContentType()
 	bodyWriter.Close()
 
 	req, err := http.NewRequest(http.MethodPost, api.MakeUri(fmt.Sprintf("conversations/%d/messages", conversationID)), bodyBuf)
@@ -187,15 +186,13 @@ func (api *ChatwootAPI) SendAttachmentMessage(conversationID int, filename strin
 		return nil, err
 	}
 	req.Header.Add("API_ACCESS_TOKEN", api.AccessToken)
-	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Content-Type", bodyWriter.FormDataContentType())
 
 	resp, err := api.Client.Do(req)
 	if err != nil {
 		log.Error(err)
 		return nil, err
 	}
-	data, _ := ioutil.ReadAll(resp.Body)
-	log.Debug(string(data))
 	if resp.StatusCode != 200 {
 		return nil, errors.New(fmt.Sprintf("POST conversations returned non-200 status code: %d", resp.StatusCode))
 	}
