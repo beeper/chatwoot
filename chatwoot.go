@@ -216,11 +216,6 @@ func main() {
 	})
 
 	syncer.OnEventType(mevent.StateEncryption, func(_ mautrix.EventSource, event *mevent.Event) { stateStore.SetEncryptionEvent(event) })
-	syncer.OnEventType(mevent.EventReaction, func(source mautrix.EventSource, event *mevent.Event) {
-		if VerifyFromAuthorizedUser(event.Sender) {
-			go HandleReaction(source, event)
-		}
-	})
 	syncer.OnEventType(mevent.EventMessage, func(source mautrix.EventSource, event *mevent.Event) {
 		if VerifyFromAuthorizedUser(event.Sender) {
 			go HandleMessage(source, event)
@@ -243,8 +238,6 @@ func main() {
 			log.Debug("Received encrypted event: ", decryptedEvent.Content.Raw)
 			if decryptedEvent.Type == mevent.EventMessage {
 				go HandleMessage(source, decryptedEvent)
-			} else if decryptedEvent.Type == mevent.EventReaction {
-				go HandleReaction(source, decryptedEvent)
 			} else if decryptedEvent.Type == mevent.EventRedaction {
 				go HandleRedaction(source, decryptedEvent)
 			}

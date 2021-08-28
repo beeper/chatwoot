@@ -51,9 +51,6 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 	stateStore.SetChatwootMessageIdForMatrixEvent(event.ID, message.ID)
 }
 
-func HandleReaction(_ mautrix.EventSource, event *mevent.Event) {
-}
-
 func HandleRedaction(_ mautrix.EventSource, event *mevent.Event) {
 	conversationID, err := stateStore.GetChatwootConversationFromMatrixRoom(event.RoomID)
 	if err != nil {
