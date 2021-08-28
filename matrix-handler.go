@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -53,7 +54,8 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 		break
 
 	case mevent.MsgEmote:
-		cm, err = chatwootApi.SendTextMessage(conversationID, content.Body)
+		localpart, _, _ := event.Sender.Parse()
+		cm, err = chatwootApi.SendTextMessage(conversationID, fmt.Sprintf(" \\* %s %s", localpart, content.Body))
 		break
 
 	case mevent.MsgAudio, mevent.MsgFile, mevent.MsgImage, mevent.MsgVideo:
