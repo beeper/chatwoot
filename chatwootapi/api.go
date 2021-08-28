@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"path"
@@ -129,6 +131,71 @@ func (api *ChatwootAPI) SendTextMessage(conversationID int, content string) (*Me
 		log.Error(err)
 		return nil, err
 	}
+	if resp.StatusCode != 200 {
+		return nil, errors.New(fmt.Sprintf("POST conversations returned non-200 status code: %d", resp.StatusCode))
+	}
+
+	decoder := json.NewDecoder(resp.Body)
+	var message Message
+	err = decoder.Decode(&message)
+	if err != nil {
+		return nil, err
+	}
+	return &message, nil
+}
+
+func (api *ChatwootAPI) SendAttachmentMessage(conversationID int, filename string, fileData io.Reader) (*Message, error) {
+	bodyBuf := &bytes.Buffer{}
+	bodyWriter := multipart.NewWriter(bodyBuf)
+
+	contentFieldWriter, err := bodyWriter.CreateFormField("content")
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	contentFieldWriter.Write([]byte{})
+
+	privateFieldWriter, err := bodyWriter.CreateFormField("private")
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	privateFieldWriter.Write([]byte("false"))
+
+	messageTypeFieldWriter, err := bodyWriter.CreateFormField("message_type")
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	messageTypeFieldWriter.Write([]byte("incoming"))
+
+	fileWriter, err := bodyWriter.CreateFormFile("attachments", filename)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
+	// Copy the file data into the form.
+	io.Copy(fileWriter, fileData)
+
+	contentType := bodyWriter.FormDataContentType()
+	bodyWriter.Close()
+
+	req, err := http.NewRequest(http.MethodPost, api.MakeUri(fmt.Sprintf("conversations/%d/messages", conversationID)), bodyBuf)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	req.Header.Add("API_ACCESS_TOKEN", api.AccessToken)
+	req.Header.Set("Content-Type", contentType)
+
+	resp, err := api.Client.Do(req)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	data, _ := ioutil.ReadAll(resp.Body)
+	log.Debug(string(data))
 	if resp.StatusCode != 200 {
 		return nil, errors.New(fmt.Sprintf("POST conversations returned non-200 status code: %d", resp.StatusCode))
 	}

@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
-
 	"maunium.net/go/mautrix"
 	mevent "maunium.net/go/mautrix/event"
+
+	"gitlab.com/beeper/chatwoot/chatwootapi"
 )
 
 var createRoomLock sync.RWMutex = sync.RWMutex{}
@@ -43,12 +45,59 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 		createRoomLock.Unlock()
 	}
 
-	message, err := chatwootApi.SendTextMessage(conversationID, event.Content.AsMessage().Body)
+	content := event.Content.AsMessage()
+	var cm *chatwootapi.Message
+	switch content.MsgType {
+	case mevent.MsgText, mevent.MsgNotice:
+		cm, err = chatwootApi.SendTextMessage(conversationID, content.Body)
+		break
+
+	case mevent.MsgEmote:
+		cm, err = chatwootApi.SendTextMessage(conversationID, content.Body)
+		break
+
+	case mevent.MsgAudio, mevent.MsgFile, mevent.MsgImage, mevent.MsgVideo:
+		log.Info(content)
+
+		var file *mevent.EncryptedFileInfo
+		rawMXC := content.URL
+		if content.File != nil {
+			file = content.File
+			rawMXC = file.URL
+		}
+		mxc, err := rawMXC.Parse()
+		if err != nil {
+			log.Errorf("Malformed content URL in %s: %v", event.ID, err)
+			return
+		}
+
+		data, err := client.DownloadBytes(mxc)
+		if err != nil {
+			log.Errorf("Failed to download media in %s: %v", event.ID, err)
+			return
+		}
+
+		if file != nil {
+			data, err = file.Decrypt(data)
+			if err != nil {
+				log.Errorf("Failed to decrypt media in %s: %v", event.ID, err)
+				return
+			}
+		}
+
+		cm, err = chatwootApi.SendAttachmentMessage(conversationID, content.Body, bytes.NewReader(data))
+		if err != nil {
+			log.Errorf("Failed to send attachment message. Error: %v", err)
+			return
+		}
+		break
+	}
+
 	if err != nil {
 		log.Error(err)
 		return
 	}
-	stateStore.SetChatwootMessageIdForMatrixEvent(event.ID, message.ID)
+	stateStore.SetChatwootMessageIdForMatrixEvent(event.ID, cm.ID)
 }
 
 func HandleRedaction(_ mautrix.EventSource, event *mevent.Event) {

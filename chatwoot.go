@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -64,9 +65,11 @@ func main() {
 		log.Fatalf("Could not read config from %s: %s", *configPath, err)
 	}
 
+	// Default configuration values
 	configuration = Configuration{
-		AllowMessagesFromUsersOnOtherHomeservers: false, // default to false
-		ChatwootBaseUrl: "https://app.chatwoot.com/",
+		AllowMessagesFromUsersOnOtherHomeservers: false,
+		ChatwootBaseUrl:                          "https://app.chatwoot.com/",
+		ListenPort:                               8080,
 	}
 
 	err = json.Unmarshal(configJson, &configuration)
@@ -258,7 +261,8 @@ func main() {
 	// Listen to the webhook
 	http.HandleFunc("/", HandleWebhook)
 	http.HandleFunc("/webhook", HandleWebhook)
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Infof("Webhook listening on port %d", configuration.ListenPort)
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", configuration.ListenPort), nil))
 }
 
 func VerifyFromAuthorizedUser(sender mid.UserID) bool {
