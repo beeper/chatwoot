@@ -1,12 +1,21 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"net/http"
+	"regexp"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"maunium.net/go/mautrix"
 	mcrypto "maunium.net/go/mautrix/crypto"
+	"maunium.net/go/mautrix/crypto/attachment"
 	mevent "maunium.net/go/mautrix/event"
 	mid "maunium.net/go/mautrix/id"
 
@@ -74,14 +83,83 @@ func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		log.Error(err)
 		return
 	}
-	resp, err := SendMessage(roomID, mevent.MessageEventContent{
-		MsgType: mevent.MsgText,
-		Body:    mc.Content,
-	})
-	if err != nil {
-		log.Error(err)
-		return
+
+	message := mc.Conversation.Messages[0]
+
+	if message.Content != nil {
+		resp, err := SendMessage(roomID, mevent.MessageEventContent{
+			MsgType: mevent.MsgText,
+			Body:    *message.Content,
+		})
+		if err != nil {
+			log.Error(err)
+		}
+		stateStore.SetChatwootMessageIdForMatrixEvent(resp.EventID, mc.ID)
 	}
 
-	stateStore.SetChatwootMessageIdForMatrixEvent(resp.EventID, mc.ID)
+	for i, a := range message.Attachments {
+		// Download the attachment
+		attachmentResp, err := DoRetry(fmt.Sprintf("Download attachment %d: %s", i, a.DataURL), func() (interface{}, error) {
+			return chatwootApi.DownloadAttachment(a.DataURL)
+		})
+		if err != nil {
+			log.Error(err)
+		}
+		attachmentPlainData := attachmentResp.([]byte)
+
+		// Extract the filename from the data URL
+		re := regexp.MustCompile(`^(.*/)?(?:$|(.+?)(?:(\.[^.]*$)|$))`)
+		match := re.FindStringSubmatch(a.DataURL)
+		filename := match[2]
+
+		file := &mevent.EncryptedFileInfo{
+			EncryptedFile: *attachment.NewEncryptedFile(),
+			URL:           "",
+		}
+		encryptedFileData := file.Encrypt(attachmentPlainData)
+
+		// Upload the file
+		resp, err := client.UploadMedia(mautrix.ReqUploadMedia{
+			Content:       bytes.NewReader(encryptedFileData),
+			ContentLength: int64(len(encryptedFileData)),
+			ContentType:   "application/octet-stream",
+			FileName:      filename,
+		})
+		file.URL = resp.ContentURI.CUString()
+
+		// Figure out the type of the file, and if it's an image, determine it's width/height.
+		messageType := mevent.MsgFile
+		mtype := http.DetectContentType(attachmentPlainData)
+		fileInfo := mevent.FileInfo{
+			Size:     len(attachmentPlainData),
+			MimeType: mtype,
+			// ThumbnailInfo *FileInfo           `json:"thumbnail_info,omitempty"`
+			// ThumbnailURL  id.ContentURIString `json:"thumbnail_url,omitempty"`
+			// ThumbnailFile *EncryptedFileInfo  `json:"thumbnail_file,omitempty"`
+		}
+		if strings.HasPrefix(mtype, "image/") {
+			m, _, err := image.Decode(bytes.NewReader(attachmentPlainData))
+			if err != nil {
+				log.Warn(err)
+			} else {
+				g := m.Bounds()
+				fileInfo.Width = g.Dx()
+				fileInfo.Height = g.Dy()
+			}
+			messageType = mevent.MsgImage
+		}
+		if strings.HasPrefix(mtype, "video/") {
+			messageType = mevent.MsgVideo
+		}
+
+		resp2, err := SendMessage(roomID, mevent.MessageEventContent{
+			Body:    filename,
+			MsgType: messageType,
+			Info:    &fileInfo,
+			File:    file,
+		})
+
+		stateStore.SetChatwootMessageIdForMatrixEvent(resp2.EventID, mc.ID)
+
+	}
 }

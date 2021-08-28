@@ -1,11 +1,15 @@
 package main
 
 import (
+	"sync"
+
 	log "github.com/sirupsen/logrus"
 
 	"maunium.net/go/mautrix"
 	mevent "maunium.net/go/mautrix/event"
 )
+
+var createRoomLock sync.RWMutex = sync.RWMutex{}
 
 func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 	if messageID, err := stateStore.GetChatwootMessageIdForMatrixEventId(event.ID); err == nil {
@@ -15,6 +19,7 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 
 	conversationID, err := stateStore.GetChatwootConversationFromMatrixRoom(event.RoomID)
 	if err != nil {
+		createRoomLock.Lock()
 		email, err := GetEmailForUser(event.Sender)
 		if err != nil {
 			// TODO do something smart here
@@ -35,6 +40,7 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 
 		stateStore.UpdateConversationIdForRoom(event.RoomID, conversation.ID)
 		conversationID = conversation.ID
+		createRoomLock.Unlock()
 	}
 
 	message, err := chatwootApi.SendTextMessage(conversationID, event.Content.AsMessage().Body)

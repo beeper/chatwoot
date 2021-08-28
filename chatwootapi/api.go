@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"path"
@@ -139,4 +140,27 @@ func (api *ChatwootAPI) SendTextMessage(conversationID int, content string) (*Me
 		return nil, err
 	}
 	return &message, nil
+}
+
+func (api *ChatwootAPI) DownloadAttachment(url string) ([]byte, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	resp, err := api.DoRequest(req)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	if resp.StatusCode != 200 {
+		return nil, errors.New(fmt.Sprintf("GET attachment returned non-200 status code: %d", resp.StatusCode))
+	}
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	return data, err
 }
