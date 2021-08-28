@@ -31,16 +31,25 @@ func (store *StateStore) SetChatwootMessageIdForMatrixEvent(eventID mid.EventID,
 	return tx.Commit()
 }
 
-func (store *StateStore) GetMatrixEventIdForChatwootMessage(chatwootMessageId int) (mid.EventID, error) {
-	row := store.DB.QueryRow(`
+func (store *StateStore) GetMatrixEventIdsForChatwootMessage(chatwootMessageId int) []mid.EventID {
+	rows, err := store.DB.Query(`
 		SELECT matrix_event_id
 		  FROM chatwoot_message_to_matrix_event
 		 WHERE chatwoot_message_id = ?`, chatwootMessageId)
-	var eventId string
-	if err := row.Scan(&eventId); err != nil {
-		return mid.EventID(eventId), err
+	eventIDs := make([]mid.EventID, 0)
+	if err != nil {
+		log.Error(err)
+		return eventIDs
 	}
-	return mid.EventID(eventId), nil
+	defer rows.Close()
+
+	var eventID mid.EventID
+	for rows.Next() {
+		if err := rows.Scan(&eventID); err == nil {
+			eventIDs = append(eventIDs, eventID)
+		}
+	}
+	return eventIDs
 }
 
 func (store *StateStore) GetChatwootMessageIdForMatrixEventId(matrixEventId mid.EventID) (int, error) {

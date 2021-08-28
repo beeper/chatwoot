@@ -107,8 +107,23 @@ func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if eventID, err := stateStore.GetMatrixEventIdForChatwootMessage(mc.ID); err == nil {
-		log.Info("Chatwoot message with ID ", mc.ID, " already has a Matrix Event ID ", eventID)
+	if mc.ContentAttributes != nil && mc.ContentAttributes.Deleted {
+		log.Infof("Message %d deleted", mc.ID)
+		roomID, err := stateStore.GetMatrixRoomFromChatwootConversation(mc.Conversation.ID)
+		if err != nil {
+			log.Error("No room for ", mc.Conversation.ID)
+			log.Error(err)
+			return
+		}
+
+		for _, eventID := range stateStore.GetMatrixEventIdsForChatwootMessage(mc.ID) {
+			client.RedactEvent(roomID, eventID)
+		}
+		return
+	}
+
+	if eventIDs := stateStore.GetMatrixEventIdsForChatwootMessage(mc.ID); len(eventIDs) > 0 {
+		log.Infof("Chatwoot message with ID %d already has a Matrix Event ID(s): %v", mc.ID, eventIDs)
 		return
 	}
 

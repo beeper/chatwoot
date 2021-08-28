@@ -38,14 +38,21 @@ type Conversation struct {
 	Messages  []Message `json:"messages"`
 }
 
+// Content Attributes
+
+type ContentAttributes struct {
+	Deleted bool `json:"deleted"`
+}
+
 // Webhook
 
 type MessageCreated struct {
-	ID           int          `json:"id"`
-	Content      string       `json:"content"`
-	CreatedAt    string       `json:"created_at"`
-	MessageType  string       `json:"message_type"`
-	ContentType  string       `json:"content_type"`
-	Private      bool         `json:"private"`
-	Conversation Conversation `json:"conversation"`
+	ID                int                `json:"id"`
+	Content           string             `json:"content"`
+	CreatedAt         string             `json:"created_at"`
+	MessageType       string             `json:"message_type"`
+	ContentType       string             `json:"content_type"`
+	ContentAttributes *ContentAttributes `json:"content_attributes"`
+	Private           bool               `json:"private"`
+	Conversation      Conversation       `json:"conversation"`
 }
