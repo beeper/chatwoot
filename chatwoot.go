@@ -11,7 +11,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/kyoh86/xdg"
 	_ "github.com/mattn/go-sqlite3"
 	log "github.com/sirupsen/logrus"
 	"maunium.net/go/mautrix"
@@ -35,31 +34,33 @@ var VERSION = "0.2.1"
 
 func main() {
 	// Arg parsing
-	configPath := flag.String("config", xdg.ConfigHome()+"/chatwoot/config.json", "config file location")
+	configPath := flag.String("config", "./config.json", "config file location")
 	logLevelStr := flag.String("loglevel", "debug", "the log level")
+	logFilename := flag.String("logfile", "", "the log file to use (defaults to '' meaning no log file)")
 	flag.Parse()
 
 	// Configure logging
-	os.MkdirAll(xdg.DataHome()+"/chatwoot", 0700)
-	logFile, err := os.OpenFile(xdg.DataHome()+"/chatwoot/chatwoot.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
-	if err == nil {
-		mw := io.MultiWriter(os.Stdout, logFile)
-		log.SetOutput(mw)
-	} else {
-		log.Errorf("failed to open logging file; using default stderr: %s", err)
+	if *logFilename != "" {
+		logFile, err := os.OpenFile(*logFilename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+		if err == nil {
+			mw := io.MultiWriter(os.Stdout, logFile)
+			log.SetOutput(mw)
+		} else {
+			log.Errorf("Failed to open logging file; using default stderr: %s", err)
+		}
 	}
 	log.SetLevel(log.DebugLevel)
 	logLevel, err := log.ParseLevel(*logLevelStr)
 	if err == nil {
 		log.SetLevel(logLevel)
 	} else {
-		log.Errorf("invalid loglevel %s. Using default 'debug'.", logLevel)
+		log.Errorf("Invalid loglevel '%s'. Using default 'debug'.", logLevel)
 	}
 
-	log.Info("chatwoot service starting...")
+	log.Info("Chatwoot service starting...")
 
 	// Load configuration
-	log.Infof("reading config from %s...", *configPath)
+	log.Infof("Reading config from %s...", *configPath)
 	configJson, err := os.ReadFile(*configPath)
 	if err != nil {
 		log.Fatalf("Could not read config from %s: %s", *configPath, err)
@@ -80,7 +81,7 @@ func main() {
 	}
 
 	// Open the config database
-	db, err := sql.Open("sqlite3", xdg.DataHome()+"/chatwoot/chatwoot.db")
+	db, err := sql.Open("sqlite3", "./chatwoot.db")
 	if err != nil {
 		log.Fatal("Could not open chatwoot database.")
 	}
