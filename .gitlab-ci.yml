@@ -20,7 +20,7 @@ build:
     paths:
     - chatwoot
 
-.build-docker:
+build-docker:
   image: docker:stable
   stage: build docker
   variables:
