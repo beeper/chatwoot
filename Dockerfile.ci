@@ -1,0 +1,14 @@
+FROM alpine:3.14
+
+ENV UID=1337 \
+    GID=1337
+
+RUN apk add --no-cache su-exec ca-certificates olm bash
+
+ARG EXECUTABLE=./chatwoot
+COPY $EXECUTABLE /usr/bin/chatwoot
+COPY ./docker-run.sh /docker-run.sh
+COPY ./config.sample.json /opt/chatwoot/config.sample.json
+VOLUME /data
+
+CMD ["/docker-run.sh"]
