@@ -19,6 +19,7 @@ build:
   artifacts:
     paths:
     - chatwoot
+    - config.sample.json
 
 build-docker:
   image: docker:stable
