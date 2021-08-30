@@ -22,6 +22,11 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 
 	conversationID, err := stateStore.GetChatwootConversationFromMatrixRoom(event.RoomID)
 	if err != nil {
+		if configuration.Username == event.Sender.String() {
+			log.Warnf("Not creating Chatwoot conversation for %s", event.Sender)
+			return
+		}
+
 		createRoomLock.Lock()
 		log.Errorf("Chatwoot conversation not found for %s: %s", event.RoomID, err)
 		contactID, err := chatwootApi.ContactIDForMxid(event.Sender)
@@ -48,16 +53,21 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 		createRoomLock.Unlock()
 	}
 
+	messageType := chatwootapi.IncomingMessage
+	if configuration.Username == event.Sender.String() {
+		messageType = chatwootapi.OutgoingMessage
+	}
+
 	content := event.Content.AsMessage()
 	var cm *chatwootapi.Message
 	switch content.MsgType {
 	case mevent.MsgText, mevent.MsgNotice:
-		cm, err = chatwootApi.SendTextMessage(conversationID, content.Body)
+		cm, err = chatwootApi.SendTextMessage(conversationID, content.Body, messageType)
 		break
 
 	case mevent.MsgEmote:
 		localpart, _, _ := event.Sender.Parse()
-		cm, err = chatwootApi.SendTextMessage(conversationID, fmt.Sprintf(" \\* %s %s", localpart, content.Body))
+		cm, err = chatwootApi.SendTextMessage(conversationID, fmt.Sprintf(" \\* %s %s", localpart, content.Body), messageType)
 		break
 
 	case mevent.MsgAudio, mevent.MsgFile, mevent.MsgImage, mevent.MsgVideo:
@@ -89,7 +99,7 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 			}
 		}
 
-		cm, err = chatwootApi.SendAttachmentMessage(conversationID, content.Body, bytes.NewReader(data))
+		cm, err = chatwootApi.SendAttachmentMessage(conversationID, content.Body, bytes.NewReader(data), messageType)
 		if err != nil {
 			log.Errorf("Failed to send attachment message. Error: %v", err)
 			return

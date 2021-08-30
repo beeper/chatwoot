@@ -16,6 +16,23 @@ import (
 	mid "maunium.net/go/mautrix/id"
 )
 
+type MessageType int
+
+const (
+	IncomingMessage MessageType = iota
+	OutgoingMessage
+)
+
+func MessageTypeString(messageType MessageType) string {
+	switch messageType {
+	case IncomingMessage:
+		return "incoming"
+	case OutgoingMessage:
+		return "outgoing"
+	}
+	return ""
+}
+
 type ChatwootAPI struct {
 	BaseURL     string
 	AccountID   int
@@ -152,8 +169,8 @@ func (api *ChatwootAPI) CreateConversation(sourceID string, contactID int) (*Con
 	return &conversation, nil
 }
 
-func (api *ChatwootAPI) SendTextMessage(conversationID int, content string) (*Message, error) {
-	values := map[string]interface{}{"content": content, "message_type": "incoming", "private": false}
+func (api *ChatwootAPI) SendTextMessage(conversationID int, content string, messageType MessageType) (*Message, error) {
+	values := map[string]interface{}{"content": content, "message_type": MessageTypeString(messageType), "private": false}
 	jsonValue, _ := json.Marshal(values)
 	req, err := http.NewRequest(http.MethodPost, api.MakeUri(fmt.Sprintf("conversations/%d/messages", conversationID)), bytes.NewBuffer(jsonValue))
 	if err != nil {
@@ -179,7 +196,7 @@ func (api *ChatwootAPI) SendTextMessage(conversationID int, content string) (*Me
 	return &message, nil
 }
 
-func (api *ChatwootAPI) SendAttachmentMessage(conversationID int, filename string, fileData io.Reader) (*Message, error) {
+func (api *ChatwootAPI) SendAttachmentMessage(conversationID int, filename string, fileData io.Reader, messageType MessageType) (*Message, error) {
 	bodyBuf := &bytes.Buffer{}
 	bodyWriter := multipart.NewWriter(bodyBuf)
 
@@ -202,7 +219,7 @@ func (api *ChatwootAPI) SendAttachmentMessage(conversationID int, filename strin
 		log.Error(err)
 		return nil, err
 	}
-	messageTypeFieldWriter.Write([]byte("incoming"))
+	messageTypeFieldWriter.Write([]byte(MessageTypeString(messageType)))
 
 	fileWriter, err := bodyWriter.CreateFormFile("attachments[]", filename)
 	if err != nil {
