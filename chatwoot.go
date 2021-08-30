@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -71,6 +72,7 @@ func main() {
 		AllowMessagesFromUsersOnOtherHomeservers: false,
 		ChatwootBaseUrl:                          "https://app.chatwoot.com/",
 		ListenPort:                               8080,
+		DBConnectionString:                       "file:chatwoot.db",
 	}
 
 	err = json.Unmarshal(configJson, &configuration)
@@ -80,10 +82,24 @@ func main() {
 		log.Fatal("Couldn't parse username")
 	}
 
-	// Open the config database
-	db, err := sql.Open("sqlite3", "./chatwoot.db")
+	// Open the chatwoot database
+	dbUri, err := url.Parse(configuration.DBConnectionString)
 	if err != nil {
-		log.Fatal("Could not open chatwoot database.")
+		log.Fatalf("Invalid database URI. %v", err)
+	}
+
+	dbType := ""
+	switch dbUri.Scheme {
+	case "file", "sqlite3":
+		dbType = "sqlite3"
+		break
+	default:
+		log.Fatalf("Invalid database scheme %s", dbUri.Scheme)
+	}
+
+	db, err := sql.Open(dbType, dbUri.String())
+	if err != nil {
+		log.Fatalf("Could not open chatwoot database. %v", err)
 	}
 
 	// Make sure to exit cleanly

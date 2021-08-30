@@ -17,6 +17,9 @@ type Configuration struct {
 	ChatwootAccountID       int
 	ChatwootInboxID         int
 
+	// Database settings
+	DBConnectionString      string
+
 	// Bot settings
 	AllowMessagesFromUsersOnOtherHomeservers bool
 
