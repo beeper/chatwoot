@@ -13,7 +13,7 @@ func (store *StateStore) SetChatwootMessageIdForMatrixEvent(eventID mid.EventID,
 		return err
 	}
 
-	update := "UPDATE chatwoot_message_to_matrix_event SET chatwoot_message_id = ? WHERE matrix_event_id = ?"
+	update := "UPDATE chatwoot_message_to_matrix_event SET chatwoot_message_id = $1 WHERE matrix_event_id = $2"
 	if _, err := tx.Exec(update, chatwootMessageId, eventID.String()); err != nil {
 		tx.Rollback()
 		return err
@@ -21,7 +21,7 @@ func (store *StateStore) SetChatwootMessageIdForMatrixEvent(eventID mid.EventID,
 
 	insert := `
 		INSERT OR IGNORE INTO chatwoot_message_to_matrix_event (matrix_event_id, chatwoot_message_id)
-		VALUES (?, ?)
+		VALUES ($1, $2)
 	`
 	if _, err := tx.Exec(insert, eventID.String(), chatwootMessageId); err != nil {
 		tx.Rollback()
@@ -35,7 +35,7 @@ func (store *StateStore) GetMatrixEventIdsForChatwootMessage(chatwootMessageId i
 	rows, err := store.DB.Query(`
 		SELECT matrix_event_id
 		  FROM chatwoot_message_to_matrix_event
-		 WHERE chatwoot_message_id = ?`, chatwootMessageId)
+		 WHERE chatwoot_message_id = $1`, chatwootMessageId)
 	eventIDs := make([]mid.EventID, 0)
 	if err != nil {
 		log.Error(err)
@@ -56,7 +56,7 @@ func (store *StateStore) GetChatwootMessageIdForMatrixEventId(matrixEventId mid.
 	row := store.DB.QueryRow(`
 		SELECT chatwoot_message_id
 		  FROM chatwoot_message_to_matrix_event
-		 WHERE matrix_event_id = ?`, matrixEventId)
+		 WHERE matrix_event_id = $1`, matrixEventId)
 	var messageID int
 	if err := row.Scan(&messageID); err != nil {
 		return messageID, err

@@ -9,7 +9,7 @@ func (store *StateStore) GetChatwootConversationFromMatrixRoom(roomID mid.RoomID
 	row := store.DB.QueryRow(`
 		SELECT chatwoot_conversation_id
 		  FROM chatwoot_conversation_to_matrix_room
-		 WHERE matrix_room_id = ?`, roomID)
+		 WHERE matrix_room_id = $1`, roomID)
 	var chatwootConversationId int
 	if err := row.Scan(&chatwootConversationId); err != nil {
 		return -1, err
@@ -21,7 +21,7 @@ func (store *StateStore) GetMatrixRoomFromChatwootConversation(conversationID in
 	row := store.DB.QueryRow(`
 		SELECT matrix_room_id
 		  FROM chatwoot_conversation_to_matrix_room
-		 WHERE chatwoot_conversation_id = ?`, conversationID)
+		 WHERE chatwoot_conversation_id = $1`, conversationID)
 	var roomID string
 	if err := row.Scan(&roomID); err != nil {
 		return mid.RoomID(roomID), err
@@ -37,7 +37,7 @@ func (store *StateStore) UpdateConversationIdForRoom(roomID mid.RoomID, conversa
 		return err
 	}
 
-	update := "UPDATE chatwoot_conversation_to_matrix_room SET chatwoot_conversation_id = ? WHERE matrix_room_id = ?"
+	update := "UPDATE chatwoot_conversation_to_matrix_room SET chatwoot_conversation_id = $1 WHERE matrix_room_id = $2"
 	if _, err := tx.Exec(update, conversationID, roomID); err != nil {
 		tx.Rollback()
 		return err
@@ -45,7 +45,7 @@ func (store *StateStore) UpdateConversationIdForRoom(roomID mid.RoomID, conversa
 
 	insert := `
 		INSERT OR IGNORE INTO chatwoot_conversation_to_matrix_room (matrix_room_id, chatwoot_conversation_id)
-		VALUES (?, ?)
+		VALUES ($1, $2)
 	`
 	if _, err := tx.Exec(insert, roomID, conversationID); err != nil {
 		tx.Rollback()

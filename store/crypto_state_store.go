@@ -18,7 +18,7 @@ func (store *StateStore) IsEncrypted(roomID mid.RoomID) bool {
 }
 
 func (store *StateStore) GetEncryptionEvent(roomId mid.RoomID) *mevent.EncryptionEventContent {
-	row := store.DB.QueryRow("SELECT encryption_event FROM rooms WHERE room_id = ?", roomId)
+	row := store.DB.QueryRow("SELECT encryption_event FROM rooms WHERE room_id = $1", roomId)
 
 	var encryptionEventJson []byte
 	if err := row.Scan(&encryptionEventJson); err != nil {
@@ -34,7 +34,7 @@ func (store *StateStore) GetEncryptionEvent(roomId mid.RoomID) *mevent.Encryptio
 }
 
 func (store *StateStore) FindSharedRooms(userId mid.UserID) []mid.RoomID {
-	rows, err := store.DB.Query("SELECT room_id FROM room_members WHERE user_id = ?", userId)
+	rows, err := store.DB.Query("SELECT room_id FROM room_members WHERE user_id = $1", userId)
 	rooms := make([]mid.RoomID, 0)
 	if err != nil {
 		return rooms
@@ -59,12 +59,12 @@ func (store *StateStore) SetMembership(event *mevent.Event) {
 	}
 	membershipEvent := event.Content.AsMember()
 	if membershipEvent.Membership.IsInviteOrJoin() {
-		insert := "INSERT OR IGNORE INTO room_members VALUES (?, ?)"
+		insert := "INSERT OR IGNORE INTO room_members VALUES ($1, $2)"
 		if _, err := tx.Exec(insert, event.RoomID, event.GetStateKey()); err != nil {
 			log.Errorf("Failed to insert membership row for %s in %s", event.GetStateKey(), event.RoomID)
 		}
 	} else {
-		del := "DELETE FROM room_members WHERE room_id = ? AND user_id = ?"
+		del := "DELETE FROM room_members WHERE room_id = $1 AND user_id = $2"
 		if _, err := tx.Exec(del, event.RoomID, event.GetStateKey()); err != nil {
 			log.Errorf("Failed to delete membership row for %s in %s", event.GetStateKey(), event.RoomID)
 		}
@@ -79,7 +79,7 @@ func (store *StateStore) upsertEncryptionEvent(roomId mid.RoomID, encryptionEven
 		return nil
 	}
 
-	update := "UPDATE rooms SET encryption_event = ? WHERE room_id = ?"
+	update := "UPDATE rooms SET encryption_event = $1 WHERE room_id = $2"
 	var encryptionEventJson []byte
 	if encryptionEvent == nil {
 		encryptionEventJson = nil
@@ -94,7 +94,7 @@ func (store *StateStore) upsertEncryptionEvent(roomId mid.RoomID, encryptionEven
 		return err
 	}
 
-	insert := "INSERT OR IGNORE INTO rooms VALUES (?, ?)"
+	insert := "INSERT OR IGNORE INTO rooms VALUES ($1, $2)"
 	if _, err := tx.Exec(insert, roomId, encryptionEventJson); err != nil {
 		tx.Rollback()
 		return err

@@ -18,13 +18,13 @@ func (store *StateStore) SaveFilterID(userID mid.UserID, filterID string) {
 		return
 	}
 
-	update := "UPDATE user_filter_ids SET filter_id = ? WHERE user_id = ?"
+	update := "UPDATE user_filter_ids SET filter_id = $1 WHERE user_id = $2"
 	if _, err := tx.Exec(update, filterID, userID); err != nil {
 		tx.Rollback()
 		return
 	}
 
-	insert := "INSERT OR IGNORE INTO user_filter_ids VALUES (?, ?)"
+	insert := "INSERT OR IGNORE INTO user_filter_ids VALUES ($1, $2)"
 	if _, err := tx.Exec(insert, userID, filterID); err != nil {
 		tx.Rollback()
 		return
@@ -34,7 +34,7 @@ func (store *StateStore) SaveFilterID(userID mid.UserID, filterID string) {
 }
 
 func (store *StateStore) LoadFilterID(userID mid.UserID) string {
-	row := store.DB.QueryRow("SELECT filter_id FROM user_filter_ids WHERE user_id = ?", userID)
+	row := store.DB.QueryRow("SELECT filter_id FROM user_filter_ids WHERE user_id = $1", userID)
 	var filterID string
 	if err := row.Scan(&filterID); err != nil {
 		return ""
@@ -50,13 +50,13 @@ func (store *StateStore) SaveNextBatch(userID mid.UserID, nextBatchToken string)
 		return
 	}
 
-	update := "UPDATE user_batch_tokens SET next_batch_token = ? WHERE user_id = ?"
+	update := "UPDATE user_batch_tokens SET next_batch_token = $1 WHERE user_id = $2"
 	if _, err := tx.Exec(update, nextBatchToken, userID); err != nil {
 		tx.Rollback()
 		return
 	}
 
-	insert := "INSERT OR IGNORE INTO user_batch_tokens VALUES (?, ?)"
+	insert := "INSERT OR IGNORE INTO user_batch_tokens VALUES ($1, $2)"
 	if _, err := tx.Exec(insert, userID, nextBatchToken); err != nil {
 		tx.Rollback()
 		return
@@ -66,7 +66,7 @@ func (store *StateStore) SaveNextBatch(userID mid.UserID, nextBatchToken string)
 }
 
 func (store *StateStore) LoadNextBatch(userID mid.UserID) string {
-	row := store.DB.QueryRow("SELECT next_batch_token FROM user_batch_tokens WHERE user_id = ?", userID)
+	row := store.DB.QueryRow("SELECT next_batch_token FROM user_batch_tokens WHERE user_id = $1", userID)
 	var batchToken string
 	if err := row.Scan(&batchToken); err != nil {
 		return ""
@@ -75,7 +75,7 @@ func (store *StateStore) LoadNextBatch(userID mid.UserID) string {
 }
 
 func (store *StateStore) GetRoomMembers(roomId mid.RoomID) []mid.UserID {
-	rows, err := store.DB.Query("SELECT user_id FROM room_members WHERE room_id = ?", roomId)
+	rows, err := store.DB.Query("SELECT user_id FROM room_members WHERE room_id = $1", roomId)
 	users := make([]mid.UserID, 0)
 	if err != nil {
 		return users

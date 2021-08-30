@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	_ "github.com/jackc/pgx/v4/stdlib"
 	_ "github.com/mattn/go-sqlite3"
 	log "github.com/sirupsen/logrus"
 	"maunium.net/go/mautrix"
@@ -92,6 +93,9 @@ func main() {
 	switch dbUri.Scheme {
 	case "file", "sqlite3":
 		dbType = "sqlite3"
+		break
+	case "postgres", "postgresql":
+		dbType = "pgx"
 		break
 	default:
 		log.Fatalf("Invalid database scheme %s", dbUri.Scheme)

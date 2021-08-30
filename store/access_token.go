@@ -20,13 +20,13 @@ func (store *StateStore) SetAccessToken(accessToken string) error {
 		return err
 	}
 
-	update := "UPDATE chatwoot_meta SET access_token = ? WHERE meta_id = 1"
+	update := "UPDATE chatwoot_meta SET access_token = $1 WHERE meta_id = 1"
 	if _, err := tx.Exec(update, accessToken); err != nil {
 		tx.Rollback()
 		return err
 	}
 
-	insert := "INSERT OR IGNORE INTO chatwoot_meta VALUES (1, ?)"
+	insert := "INSERT OR IGNORE INTO chatwoot_meta VALUES (1, $1)"
 	if _, err := tx.Exec(insert, accessToken); err != nil {
 		tx.Rollback()
 		return err
