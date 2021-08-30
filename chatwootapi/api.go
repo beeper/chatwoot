@@ -88,6 +88,10 @@ func (api *ChatwootAPI) CreateContact(userID mid.UserID) (int, error) {
 		return 0, err
 	}
 	if resp.StatusCode != 200 {
+		data, err := io.ReadAll(resp.Body)
+		if err == nil {
+			log.Error(string(data))
+		}
 		return 0, errors.New(fmt.Sprintf("POST contacts returned non-200 status code: %d", resp.StatusCode))
 	}
 

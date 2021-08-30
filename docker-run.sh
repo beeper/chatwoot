@@ -9,7 +9,7 @@ function fixperms {
 	chown -R $UID:$GID /data /opt/chatwoot
 }
 
-if [[ ! -f /data/config.yaml ]]; then
+if [[ ! -f /data/config.json ]]; then
 	cp /opt/chatwoot/config.sample.json /data/config.json
 	echo "Didn't find a config file."
 	echo "Copied default config file to /data/config.json"

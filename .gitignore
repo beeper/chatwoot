@@ -1,6 +1,8 @@
 bin
 config*.json
 !config.sample.json
+chatwoot.db
+chatwoot.log
 .direnv
 standupbot
 passwordfile
