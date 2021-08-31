@@ -51,6 +51,7 @@ func main() {
 			log.Errorf("Failed to open logging file; using default stderr: %s", err)
 		}
 	}
+	log.SetFormatter(&log.JSONFormatter{})
 	log.SetLevel(log.DebugLevel)
 	logLevel, err := log.ParseLevel(*logLevelStr)
 	if err == nil {
