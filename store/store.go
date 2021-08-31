@@ -3,11 +3,12 @@ package store
 import "database/sql"
 
 type StateStore struct {
-	DB *sql.DB
+	DB      *sql.DB
+	dialect string
 }
 
-func NewStateStore(db *sql.DB) *StateStore {
-	return &StateStore{DB: db}
+func NewStateStore(db *sql.DB, dialect string) *StateStore {
+	return &StateStore{DB: db, dialect: dialect}
 }
 
 func (store *StateStore) CreateTables() error {
@@ -50,14 +51,14 @@ func (store *StateStore) CreateTables() error {
 		`,
 		`
 		CREATE TABLE IF NOT EXISTS chatwoot_conversation_to_matrix_room (
-			matrix_room_id            VARCHAR(255),
-			chatwoot_conversation_id  INTEGER,
+			matrix_room_id            VARCHAR(255) UNIQUE,
+			chatwoot_conversation_id  INTEGER      UNIQUE,
 			PRIMARY KEY (matrix_room_id, chatwoot_conversation_id)
 		)
 		`,
 		`
 		CREATE TABLE IF NOT EXISTS chatwoot_message_to_matrix_event (
-			matrix_event_id      VARCHAR(255),
+			matrix_event_id      VARCHAR(255) UNIQUE,
 			chatwoot_message_id  INTEGER,
 			PRIMARY KEY (matrix_event_id, chatwoot_message_id)
 		)
