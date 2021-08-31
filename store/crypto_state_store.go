@@ -59,9 +59,14 @@ func (store *StateStore) SetMembership(event *mevent.Event) {
 	}
 	membershipEvent := event.Content.AsMember()
 	if membershipEvent.Membership.IsInviteOrJoin() {
-		insert := "INSERT OR IGNORE INTO room_members VALUES ($1, $2)"
+		insert := ""
+		if store.dialect == "postgres" {
+			insert = "INSERT INTO room_members (room_id, user_id) VALUES ($1, $2) ON CONFLICT (room_id, user_id) DO NOTHING"
+		} else {
+			insert = "INSERT OR IGNORE INTO room_members (room_id, user_id) VALUES ($1, $2)"
+		}
 		if _, err := tx.Exec(insert, event.RoomID, event.GetStateKey()); err != nil {
-			log.Errorf("Failed to insert membership row for %s in %s", event.GetStateKey(), event.RoomID)
+			log.Errorf("Failed to insert membership row for %s in %s: %+v", event.GetStateKey(), event.RoomID, err)
 		}
 	} else {
 		del := "DELETE FROM room_members WHERE room_id = $1 AND user_id = $2"
@@ -89,14 +94,12 @@ func (store *StateStore) SetEncryptionEvent(event *mevent.Event) {
 		encryptionEventJson = nil
 	}
 
-	if store.dialect == "pgx" {
+	if store.dialect == "postgres" {
 		upsert := `
 			INSERT INTO rooms (room_id, encryption_event)
 				VALUES ($1, $2)
-			ON CONFLICT DO
-				UPDATE rooms
+			ON CONFLICT (room_id) DO UPDATE
 				SET encryption_event = $2
-				WHERE room_id = $1
 		`
 		if _, err := tx.Exec(upsert, event.RoomID, encryptionEventJson); err != nil {
 			tx.Rollback()

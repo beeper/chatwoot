@@ -48,7 +48,11 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 			return
 		}
 
-		stateStore.UpdateConversationIdForRoom(event.RoomID, conversation.ID)
+		err = stateStore.UpdateConversationIdForRoom(event.RoomID, conversation.ID)
+		if err != nil {
+			log.Error(err)
+			return
+		}
 		conversationID = conversation.ID
 		createRoomLock.Unlock()
 	}

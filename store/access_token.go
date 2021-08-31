@@ -20,10 +20,12 @@ func (store *StateStore) SetAccessToken(accessToken string) error {
 		return err
 	}
 
-	if store.dialect == "pgx" {
+	if store.dialect == "postgres" {
 		upsert := `
-			INSERT INTO chatwoot_meta VALUES (1, $1)
-			ON CONFLICT DO UPDATE SET access_token = $1 WHERE meta_id = 1
+			INSERT INTO chatwoot_meta (meta_id, access_token)
+				VALUES (1, $1)
+			ON CONFLICT (meta_id) DO UPDATE
+				SET access_token = $1
 		`
 		if _, err := tx.Exec(upsert, accessToken); err != nil {
 			tx.Rollback()

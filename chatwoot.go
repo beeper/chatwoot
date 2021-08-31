@@ -90,12 +90,15 @@ func main() {
 	}
 
 	dbType := ""
+	dbDialect := ""
 	switch dbUri.Scheme {
 	case "file", "sqlite3":
 		dbType = "sqlite3"
+		dbDialect = "sqlite3"
 		break
 	case "postgres", "postgresql":
 		dbType = "pgx"
+		dbDialect = "postgres"
 		break
 	default:
 		log.Fatalf("Invalid database scheme %s", dbUri.Scheme)
@@ -125,7 +128,7 @@ func main() {
 		}
 	}()
 
-	stateStore = store.NewStateStore(db, dbType)
+	stateStore = store.NewStateStore(db, dbDialect)
 	if err := stateStore.CreateTables(); err != nil {
 		log.Fatal("Failed to create the tables for chatwoot.", err)
 	}
@@ -187,7 +190,7 @@ func main() {
 	// Setup the crypto store
 	sqlCryptoStore := mcrypto.NewSQLCryptoStore(
 		db,
-		"sqlite3",
+		dbDialect,
 		username.String(),
 		mid.DeviceID("Bot Host"),
 		[]byte("chatwoot_cryptostore_key"),
@@ -195,6 +198,7 @@ func main() {
 	)
 	err = sqlCryptoStore.CreateTables()
 	if err != nil {
+		log.Error(err)
 		log.Fatal("Could not create tables for the SQL crypto store.")
 	}
 
@@ -257,9 +261,9 @@ func main() {
 
 		decryptedEvent, err := olmMachine.DecryptMegolmEvent(event)
 		if err != nil {
-			log.Warn("Failed to decrypt: ", err)
+			log.Warnf("Failed to decrypt message from %s in %s: %+v", event.Sender, event.RoomID, err)
 		} else {
-			log.Debug("Received encrypted event: ", decryptedEvent.Content.Raw)
+			log.Debugf("Received encrypted event from %s in %s", event.Sender, event.RoomID)
 			if decryptedEvent.Type == mevent.EventMessage {
 				go HandleMessage(source, decryptedEvent)
 			} else if decryptedEvent.Type == mevent.EventRedaction {

@@ -19,13 +19,11 @@ func (store *StateStore) SaveFilterID(userID mid.UserID, filterID string) {
 		return
 	}
 
-	if store.dialect == "pgx" {
+	if store.dialect == "postgres" {
 		upsert := `
 			INSERT INTO user_filter_ids (user_id, filter_id) VALUES ($1, $2)
-			ON CONFLICT DO
-				UPDATE user_filter_ids
+			ON CONFLICT (user_id) DO UPDATE
 				SET filter_id = $2
-				WHERE user_id = $1
 		`
 		if _, err := tx.Exec(upsert, userID, filterID); err != nil {
 			tx.Rollback()
@@ -68,13 +66,11 @@ func (store *StateStore) SaveNextBatch(userID mid.UserID, nextBatchToken string)
 		return
 	}
 
-	if store.dialect == "pgx" {
+	if store.dialect == "postgres" {
 		upsert := `
 			INSERT INTO user_batch_tokens (user_id, next_batch_token) VALUES ($1, $2)
-			ON CONFLICT DO
-				UPDATE user_batch_tokens
+			ON CONFLICT (user_id) DO UPDATE
 				SET next_batch_token = $2
-				WHERE user_id = $1
 		`
 		if _, err := tx.Exec(upsert, userID, nextBatchToken); err != nil {
 			tx.Rollback()
