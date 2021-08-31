@@ -233,14 +233,6 @@ func main() {
 			}
 		} else if event.GetStateKey() == username.String() && event.Content.AsMember().Membership.IsLeaveOrBan() {
 			log.Infof("Left or banned from %s", event.RoomID)
-		} else {
-			roomMembers := stateStore.GetRoomMembers(event.RoomID)
-			if len(roomMembers) == 1 && roomMembers[0] == username {
-				log.Infof("Leaving %s because we're the last here", event.RoomID)
-				DoRetry("leave room", func() (interface{}, error) {
-					return client.LeaveRoom(event.RoomID)
-				})
-			}
 		}
 	})
 
