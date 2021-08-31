@@ -3,11 +3,12 @@ package store
 import "database/sql"
 
 type StateStore struct {
-	DB *sql.DB
+	DB      *sql.DB
+	dialect string
 }
 
-func NewStateStore(db *sql.DB) *StateStore {
-	return &StateStore{DB: db}
+func NewStateStore(db *sql.DB, dialect string) *StateStore {
+	return &StateStore{DB: db, dialect: dialect}
 }
 
 func (store *StateStore) CreateTables() error {

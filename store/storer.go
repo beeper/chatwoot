@@ -15,19 +15,37 @@ func (store *StateStore) SaveFilterID(userID mid.UserID, filterID string) {
 	tx, err := store.DB.Begin()
 	if err != nil {
 		tx.Rollback()
+		log.Error(err)
 		return
 	}
 
-	update := "UPDATE user_filter_ids SET filter_id = $1 WHERE user_id = $2"
-	if _, err := tx.Exec(update, filterID, userID); err != nil {
-		tx.Rollback()
-		return
-	}
+	if store.dialect == "pgx" {
+		upsert := `
+			INSERT INTO user_filter_ids (user_id, filter_id) VALUES ($1, $2)
+			ON CONFLICT DO
+				UPDATE user_filter_ids
+				SET filter_id = $2
+				WHERE user_id = $1
+		`
+		if _, err := tx.Exec(upsert, userID, filterID); err != nil {
+			tx.Rollback()
+			log.Error(err)
+			return
+		}
+	} else {
+		update := "UPDATE user_filter_ids SET filter_id = $1 WHERE user_id = $2"
+		if _, err := tx.Exec(update, filterID, userID); err != nil {
+			tx.Rollback()
+			log.Error(err)
+			return
+		}
 
-	insert := "INSERT OR IGNORE INTO user_filter_ids VALUES ($1, $2)"
-	if _, err := tx.Exec(insert, userID, filterID); err != nil {
-		tx.Rollback()
-		return
+		insert := "INSERT OR IGNORE INTO user_filter_ids VALUES ($1, $2)"
+		if _, err := tx.Exec(insert, userID, filterID); err != nil {
+			tx.Rollback()
+			log.Error(err)
+			return
+		}
 	}
 
 	tx.Commit()
@@ -50,16 +68,31 @@ func (store *StateStore) SaveNextBatch(userID mid.UserID, nextBatchToken string)
 		return
 	}
 
-	update := "UPDATE user_batch_tokens SET next_batch_token = $1 WHERE user_id = $2"
-	if _, err := tx.Exec(update, nextBatchToken, userID); err != nil {
-		tx.Rollback()
-		return
-	}
+	if store.dialect == "pgx" {
+		upsert := `
+			INSERT INTO user_batch_tokens (user_id, next_batch_token) VALUES ($1, $2)
+			ON CONFLICT DO
+				UPDATE user_batch_tokens
+				SET next_batch_token = $2
+				WHERE user_id = $1
+		`
+		if _, err := tx.Exec(upsert, userID, nextBatchToken); err != nil {
+			tx.Rollback()
+			log.Error(err)
+			return
+		}
+	} else {
+		update := "UPDATE user_batch_tokens SET next_batch_token = $1 WHERE user_id = $2"
+		if _, err := tx.Exec(update, nextBatchToken, userID); err != nil {
+			tx.Rollback()
+			return
+		}
 
-	insert := "INSERT OR IGNORE INTO user_batch_tokens VALUES ($1, $2)"
-	if _, err := tx.Exec(insert, userID, nextBatchToken); err != nil {
-		tx.Rollback()
-		return
+		insert := "INSERT OR IGNORE INTO user_batch_tokens VALUES ($1, $2)"
+		if _, err := tx.Exec(insert, userID, nextBatchToken); err != nil {
+			tx.Rollback()
+			return
+		}
 	}
 
 	tx.Commit()

@@ -72,37 +72,6 @@ func (store *StateStore) SetMembership(event *mevent.Event) {
 	tx.Commit()
 }
 
-func (store *StateStore) upsertEncryptionEvent(roomId mid.RoomID, encryptionEvent *mevent.Event) error {
-	tx, err := store.DB.Begin()
-	if err != nil {
-		tx.Rollback()
-		return nil
-	}
-
-	update := "UPDATE rooms SET encryption_event = $1 WHERE room_id = $2"
-	var encryptionEventJson []byte
-	if encryptionEvent == nil {
-		encryptionEventJson = nil
-	}
-	encryptionEventJson, err = json.Marshal(encryptionEvent)
-	if err != nil {
-		encryptionEventJson = nil
-	}
-
-	if _, err := tx.Exec(update, encryptionEventJson, roomId); err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	insert := "INSERT OR IGNORE INTO rooms VALUES ($1, $2)"
-	if _, err := tx.Exec(insert, roomId, encryptionEventJson); err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	return tx.Commit()
-}
-
 func (store *StateStore) SetEncryptionEvent(event *mevent.Event) {
 	log.Debugf("Updating encryption_event for %s", event.RoomID)
 	tx, err := store.DB.Begin()
@@ -110,9 +79,41 @@ func (store *StateStore) SetEncryptionEvent(event *mevent.Event) {
 		tx.Rollback()
 		return
 	}
-	err = store.upsertEncryptionEvent(event.RoomID, event)
+
+	var encryptionEventJson []byte
+	if event == nil {
+		encryptionEventJson = nil
+	}
+	encryptionEventJson, err = json.Marshal(event)
 	if err != nil {
-		log.Errorf("Upsert encryption event failed %s", err)
+		encryptionEventJson = nil
+	}
+
+	if store.dialect == "pgx" {
+		upsert := `
+			INSERT INTO rooms (room_id, encryption_event)
+				VALUES ($1, $2)
+			ON CONFLICT DO
+				UPDATE rooms
+				SET encryption_event = $2
+				WHERE room_id = $1
+		`
+		if _, err := tx.Exec(upsert, event.RoomID, encryptionEventJson); err != nil {
+			tx.Rollback()
+			log.Error(err)
+		}
+	} else {
+		update := "UPDATE rooms SET encryption_event = $1 WHERE room_id = $2"
+		if _, err := tx.Exec(update, encryptionEventJson, event.RoomID); err != nil {
+			tx.Rollback()
+			log.Error(err)
+		}
+
+		insert := "INSERT OR IGNORE INTO rooms (room_id, encryption_event) VALUES ($1, $2)"
+		if _, err := tx.Exec(insert, event.RoomID, encryptionEventJson); err != nil {
+			tx.Rollback()
+			log.Error(err)
+		}
 	}
 
 	tx.Commit()

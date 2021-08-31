@@ -125,7 +125,7 @@ func main() {
 		}
 	}()
 
-	stateStore = store.NewStateStore(db)
+	stateStore = store.NewStateStore(db, dbType)
 	if err := stateStore.CreateTables(); err != nil {
 		log.Fatal("Failed to create the tables for chatwoot.", err)
 	}
