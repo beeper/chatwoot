@@ -13,32 +13,15 @@ func (store *StateStore) SetChatwootMessageIdForMatrixEvent(eventID mid.EventID,
 		return err
 	}
 
-	if store.dialect == "postgres" {
-		upsert := `
-			INSERT INTO chatwoot_message_to_matrix_event (matrix_event_id, chatwoot_message_id)
-				VALUES ($1, $2)
-			ON CONFLICT (matrix_event_id) DO UPDATE
-				SET chatwoot_message_id = $2
-		`
-		if _, err := tx.Exec(upsert, eventID, chatwootMessageId); err != nil {
-			tx.Rollback()
-			return err
-		}
-	} else {
-		update := "UPDATE chatwoot_message_to_matrix_event SET chatwoot_message_id = $1 WHERE matrix_event_id = $2"
-		if _, err := tx.Exec(update, chatwootMessageId, eventID); err != nil {
-			tx.Rollback()
-			return err
-		}
-
-		insert := `
-			INSERT OR IGNORE INTO chatwoot_message_to_matrix_event (matrix_event_id, chatwoot_message_id)
+	upsert := `
+		INSERT INTO chatwoot_message_to_matrix_event (matrix_event_id, chatwoot_message_id)
 			VALUES ($1, $2)
-		`
-		if _, err := tx.Exec(insert, eventID, chatwootMessageId); err != nil {
-			tx.Rollback()
-			return err
-		}
+		ON CONFLICT (matrix_event_id) DO UPDATE
+			SET chatwoot_message_id = $2
+	`
+	if _, err := tx.Exec(upsert, eventID, chatwootMessageId); err != nil {
+		tx.Rollback()
+		return err
 	}
 
 	return tx.Commit()

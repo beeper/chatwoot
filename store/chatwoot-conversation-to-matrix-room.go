@@ -66,32 +66,15 @@ func (store *StateStore) UpdateConversationIdForRoom(roomID mid.RoomID, conversa
 		return err
 	}
 
-	if store.dialect == "postgres" {
-		upsert := `
-			INSERT INTO chatwoot_conversation_to_matrix_room (matrix_room_id, chatwoot_conversation_id)
-				VALUES ($1, $2)
-			ON CONFLICT (matrix_room_id) DO UPDATE
-				SET chatwoot_conversation_id = $2
-		`
-		if _, err := tx.Exec(upsert, roomID, conversationID); err != nil {
-			tx.Rollback()
-			return err
-		}
-	} else {
-		update := "UPDATE chatwoot_conversation_to_matrix_room SET chatwoot_conversation_id = $1 WHERE matrix_room_id = $2"
-		if _, err := tx.Exec(update, conversationID, roomID); err != nil {
-			tx.Rollback()
-			return err
-		}
-
-		insert := `
-			INSERT OR IGNORE INTO chatwoot_conversation_to_matrix_room (matrix_room_id, chatwoot_conversation_id)
+	upsert := `
+		INSERT INTO chatwoot_conversation_to_matrix_room (matrix_room_id, chatwoot_conversation_id)
 			VALUES ($1, $2)
-		`
-		if _, err := tx.Exec(insert, roomID, conversationID); err != nil {
-			tx.Rollback()
-			return err
-		}
+		ON CONFLICT (matrix_room_id) DO UPDATE
+			SET chatwoot_conversation_id = $2
+	`
+	if _, err := tx.Exec(upsert, roomID, conversationID); err != nil {
+		tx.Rollback()
+		return err
 	}
 
 	return tx.Commit()

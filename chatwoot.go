@@ -14,7 +14,6 @@ import (
 	"syscall"
 
 	_ "github.com/jackc/pgx/v4/stdlib"
-	_ "github.com/mattn/go-sqlite3"
 	log "github.com/sirupsen/logrus"
 	"maunium.net/go/mautrix"
 	mcrypto "maunium.net/go/mautrix/crypto"
@@ -96,10 +95,6 @@ func main() {
 	dbType := ""
 	dbDialect := ""
 	switch dbUri.Scheme {
-	case "file", "sqlite3":
-		dbType = "sqlite3"
-		dbDialect = "sqlite3"
-		break
 	case "postgres", "postgresql":
 		dbType = "pgx"
 		dbDialect = "postgres"
