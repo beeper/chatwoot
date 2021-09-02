@@ -8,6 +8,7 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"io/ioutil"
 	"net/http"
 	"regexp"
 	"strings"
@@ -94,20 +95,67 @@ func RetrieveAndUploadMediaToMatrix(url string) ([]byte, mevent.EncryptedFileInf
 }
 
 func HandleWebhook(w http.ResponseWriter, r *http.Request) {
-	decoder := json.NewDecoder(r.Body)
-	var mc chatwootapi.MessageCreated
-	err := decoder.Decode(&mc)
+	webhookBody, _ := ioutil.ReadAll(r.Body)
+
+	var eventJson map[string]interface{}
+	err := json.Unmarshal(webhookBody, &eventJson)
 	if err != nil {
+		log.Errorf("Error decoding webhook body: %+v", err)
+		return
+	}
+
+	if eventType, found := eventJson["event"]; found {
+		switch eventType {
+		case "conversation_status_changed":
+			var csc chatwootapi.ConversationStatusChanged
+			err := json.Unmarshal(webhookBody, &csc)
+			if err != nil {
+				log.Errorf("Error decoding message created webhook body: %+v", err)
+				return
+			}
+			HandleConversationStatusChanged(csc)
+			break
+		case "message_created":
+			var mc chatwootapi.MessageCreated
+			err := json.Unmarshal(webhookBody, &mc)
+			if err != nil {
+				log.Errorf("Error decoding message created webhook body: %+v", err)
+				return
+			}
+			HandleMessageCreated(mc)
+			break
+		}
+	}
+}
+
+func HandleConversationStatusChanged(csc chatwootapi.ConversationStatusChanged) {
+	if csc.Status != "open" {
+		// it's backwards, this means that the conversation was re-opened
+		return
+	}
+
+	roomID, mostRecentEventID, err := stateStore.GetMatrixRoomFromChatwootConversation(csc.ID)
+	if err != nil {
+		log.Error("No room for ", csc.ID)
 		log.Error(err)
 		return
 	}
 
+	_, err = DoRetry(fmt.Sprintf("send read receipt to %s for event %s", roomID, mostRecentEventID), func() (interface{}, error) {
+		return nil, client.MarkRead(roomID, mostRecentEventID)
+	})
+	if err != nil {
+		log.Errorf("Failed to send read receipt to %s for event %s", roomID, mostRecentEventID)
+	}
+}
+
+func HandleMessageCreated(mc chatwootapi.MessageCreated) {
 	// Skip private messages
 	if mc.Private {
 		return
 	}
 
-	roomID, err := stateStore.GetMatrixRoomFromChatwootConversation(mc.Conversation.ID)
+	roomID, _, err := stateStore.GetMatrixRoomFromChatwootConversation(mc.Conversation.ID)
 	if err != nil {
 		log.Error("No room for ", mc.Conversation.ID)
 		log.Error(err)

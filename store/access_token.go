@@ -20,29 +20,15 @@ func (store *StateStore) SetAccessToken(accessToken string) error {
 		return err
 	}
 
-	if store.dialect == "postgres" {
-		upsert := `
-			INSERT INTO chatwoot_meta (meta_id, access_token)
-				VALUES (1, $1)
-			ON CONFLICT (meta_id) DO UPDATE
-				SET access_token = $1
-		`
-		if _, err := tx.Exec(upsert, accessToken); err != nil {
-			tx.Rollback()
-			return err
-		}
-	} else {
-		update := "UPDATE chatwoot_meta SET access_token = $1 WHERE meta_id = 1"
-		if _, err := tx.Exec(update, accessToken); err != nil {
-			tx.Rollback()
-			return err
-		}
-
-		insert := "INSERT OR IGNORE INTO chatwoot_meta VALUES (1, $1)"
-		if _, err := tx.Exec(insert, accessToken); err != nil {
-			tx.Rollback()
-			return err
-		}
+	upsert := `
+		INSERT INTO chatwoot_meta (meta_id, access_token)
+			VALUES (1, $1)
+		ON CONFLICT (meta_id) DO UPDATE
+			SET access_token = $1
+	`
+	if _, err := tx.Exec(upsert, accessToken); err != nil {
+		tx.Rollback()
+		return err
 	}
 
 	return tx.Commit()

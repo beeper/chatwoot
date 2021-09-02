@@ -14,7 +14,6 @@ import (
 	"syscall"
 
 	_ "github.com/jackc/pgx/v4/stdlib"
-	_ "github.com/mattn/go-sqlite3"
 	log "github.com/sirupsen/logrus"
 	"maunium.net/go/mautrix"
 	mcrypto "maunium.net/go/mautrix/crypto"
@@ -96,10 +95,6 @@ func main() {
 	dbType := ""
 	dbDialect := ""
 	switch dbUri.Scheme {
-	case "file", "sqlite3":
-		dbType = "sqlite3"
-		dbDialect = "sqlite3"
-		break
 	case "postgres", "postgresql":
 		dbType = "pgx"
 		dbDialect = "postgres"
@@ -244,16 +239,19 @@ func main() {
 
 	syncer.OnEventType(mevent.StateEncryption, func(_ mautrix.EventSource, event *mevent.Event) { stateStore.SetEncryptionEvent(event) })
 	syncer.OnEventType(mevent.EventMessage, func(source mautrix.EventSource, event *mevent.Event) {
+		stateStore.UpdateMostRecentEventIdForRoom(event.RoomID, event.ID)
 		if VerifyFromAuthorizedUser(event.Sender) {
 			go HandleMessage(source, event)
 		}
 	})
 	syncer.OnEventType(mevent.EventRedaction, func(source mautrix.EventSource, event *mevent.Event) {
+		stateStore.UpdateMostRecentEventIdForRoom(event.RoomID, event.ID)
 		if VerifyFromAuthorizedUser(event.Sender) {
 			go HandleRedaction(source, event)
 		}
 	})
 	syncer.OnEventType(mevent.EventEncrypted, func(source mautrix.EventSource, event *mevent.Event) {
+		stateStore.UpdateMostRecentEventIdForRoom(event.RoomID, event.ID)
 		if !VerifyFromAuthorizedUser(event.Sender) {
 			return
 		}
