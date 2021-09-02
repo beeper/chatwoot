@@ -117,12 +117,12 @@ func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	// Ensure that if the webhook event comes through before the message ID
 	// is persisted to the database it will be properly deduplicated.
 	for _, userID := range stateStore.GetNonBotRoomMembers(roomID) {
-		userSendLock, found := userSendlocks[userID]
+		_, found := userSendlocks[userID]
 		if found {
-			log.Debugf("[chatwoot-handler] Locking send lock for %s", userID)
-			userSendLock.Lock()
+			userSendlocks[userID].Lock()
+			log.Debugf("[chatwoot-handler] Acquired send lock for %s", userID)
 			defer log.Debugf("[chatwoot-handler] Unlocked send lock for %s", userID)
-			defer userSendLock.Unlock()
+			defer userSendlocks[userID].Unlock()
 		}
 	}
 

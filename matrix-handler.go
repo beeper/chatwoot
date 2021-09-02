@@ -64,15 +64,15 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 
 	// Ensure that if the webhook event comes through before the message ID
 	// is persisted to the database it will be properly deduplicated.
-	userSendLock, found := userSendlocks[event.Sender]
+	_, found := userSendlocks[event.Sender]
 	if !found {
 		log.Debugf("Creating send lock for %s", event.Sender)
-		userSendlocks[event.Sender] = sync.Mutex{}
+		userSendlocks[event.Sender] = &sync.Mutex{}
 	}
-	log.Debugf("[matrix-handler] Locking send lock for %s", event.Sender)
-	userSendLock.Lock()
+	userSendlocks[event.Sender].Lock()
+	log.Debugf("[matrix-handler] Acquired send lock for %s", event.Sender)
 	defer log.Debugf("[matrix-handler] Unlocked send lock for %s", event.Sender)
-	defer userSendLock.Unlock()
+	defer userSendlocks[event.Sender].Unlock()
 
 	content := event.Content.AsMessage()
 	var cm *chatwootapi.Message
