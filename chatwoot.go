@@ -244,16 +244,19 @@ func main() {
 
 	syncer.OnEventType(mevent.StateEncryption, func(_ mautrix.EventSource, event *mevent.Event) { stateStore.SetEncryptionEvent(event) })
 	syncer.OnEventType(mevent.EventMessage, func(source mautrix.EventSource, event *mevent.Event) {
+		stateStore.UpdateMostRecentEventIdForRoom(event.RoomID, event.ID)
 		if VerifyFromAuthorizedUser(event.Sender) {
 			go HandleMessage(source, event)
 		}
 	})
 	syncer.OnEventType(mevent.EventRedaction, func(source mautrix.EventSource, event *mevent.Event) {
+		stateStore.UpdateMostRecentEventIdForRoom(event.RoomID, event.ID)
 		if VerifyFromAuthorizedUser(event.Sender) {
 			go HandleRedaction(source, event)
 		}
 	})
 	syncer.OnEventType(mevent.EventEncrypted, func(source mautrix.EventSource, event *mevent.Event) {
+		stateStore.UpdateMostRecentEventIdForRoom(event.RoomID, event.ID)
 		if !VerifyFromAuthorizedUser(event.Sender) {
 			return
 		}

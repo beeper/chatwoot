@@ -1,6 +1,8 @@
 package store
 
 import (
+	"database/sql"
+
 	log "github.com/sirupsen/logrus"
 	mid "maunium.net/go/mautrix/id"
 )
@@ -17,16 +19,43 @@ func (store *StateStore) GetChatwootConversationFromMatrixRoom(roomID mid.RoomID
 	return chatwootConversationId, nil
 }
 
-func (store *StateStore) GetMatrixRoomFromChatwootConversation(conversationID int) (mid.RoomID, error) {
+func (store *StateStore) GetMatrixRoomFromChatwootConversation(conversationID int) (mid.RoomID, mid.EventID, error) {
 	row := store.DB.QueryRow(`
-		SELECT matrix_room_id
+		SELECT matrix_room_id, most_recent_event_id
 		  FROM chatwoot_conversation_to_matrix_room
 		 WHERE chatwoot_conversation_id = $1`, conversationID)
-	var roomID string
-	if err := row.Scan(&roomID); err != nil {
-		return mid.RoomID(roomID), err
+	var roomID mid.RoomID
+	var mostRecentEventIdStr sql.NullString
+	if err := row.Scan(&roomID, &mostRecentEventIdStr); err != nil {
+		return "", "", err
 	}
-	return mid.RoomID(roomID), nil
+	if mostRecentEventIdStr.Valid {
+		return roomID, mid.EventID(mostRecentEventIdStr.String), nil
+	} else {
+		return roomID, mid.EventID(""), nil
+	}
+}
+
+func (store *StateStore) UpdateMostRecentEventIdForRoom(roomID mid.RoomID, mostRecentEventID mid.EventID) error {
+	log.Debugf("Setting most recent event ID for %s to %s", roomID, mostRecentEventID)
+	tx, err := store.DB.Begin()
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	update := `
+		UPDATE chatwoot_conversation_to_matrix_room
+		SET most_recent_event_id = $2
+		WHERE matrix_room_id = $1
+	`
+	if _, err := tx.Exec(update, roomID, mostRecentEventID); err != nil {
+		tx.Rollback()
+		log.Error(err)
+		return err
+	}
+
+	return tx.Commit()
 }
 
 func (store *StateStore) UpdateConversationIdForRoom(roomID mid.RoomID, conversationID int) error {
