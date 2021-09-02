@@ -12,7 +12,7 @@ import (
 	"gitlab.com/beeper/chatwoot/chatwootapi"
 )
 
-var createRoomLock sync.RWMutex = sync.RWMutex{}
+var createRoomLock sync.Mutex = sync.Mutex{}
 
 func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 	if messageID, err := stateStore.GetChatwootMessageIdForMatrixEventId(event.ID); err == nil {
@@ -61,6 +61,18 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 	if configuration.Username == event.Sender.String() {
 		messageType = chatwootapi.OutgoingMessage
 	}
+
+	// Ensure that if the webhook event comes through before the message ID
+	// is persisted to the database it will be properly deduplicated.
+	userSendLock, found := userSendlocks[event.Sender]
+	if !found {
+		log.Debugf("Creating send lock for %s", event.Sender)
+		userSendlocks[event.Sender] = sync.Mutex{}
+	}
+	log.Debugf("[matrix-handler] Locking send lock for %s", event.Sender)
+	userSendLock.Lock()
+	defer log.Debugf("[matrix-handler] Unlocked send lock for %s", event.Sender)
+	defer userSendLock.Unlock()
 
 	content := event.Content.AsMessage()
 	var cm *chatwootapi.Message

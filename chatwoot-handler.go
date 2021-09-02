@@ -107,15 +107,27 @@ func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	roomID, err := stateStore.GetMatrixRoomFromChatwootConversation(mc.Conversation.ID)
+	if err != nil {
+		log.Error("No room for ", mc.Conversation.ID)
+		log.Error(err)
+		return
+	}
+
+	// Ensure that if the webhook event comes through before the message ID
+	// is persisted to the database it will be properly deduplicated.
+	for _, userID := range stateStore.GetNonBotRoomMembers(roomID) {
+		userSendLock, found := userSendlocks[userID]
+		if found {
+			log.Debugf("[chatwoot-handler] Locking send lock for %s", userID)
+			userSendLock.Lock()
+			defer log.Debugf("[chatwoot-handler] Unlocked send lock for %s", userID)
+			defer userSendLock.Unlock()
+		}
+	}
+
 	if mc.ContentAttributes != nil && mc.ContentAttributes.Deleted {
 		log.Infof("Message %d deleted", mc.ID)
-		roomID, err := stateStore.GetMatrixRoomFromChatwootConversation(mc.Conversation.ID)
-		if err != nil {
-			log.Error("No room for ", mc.Conversation.ID)
-			log.Error(err)
-			return
-		}
-
 		for _, eventID := range stateStore.GetMatrixEventIdsForChatwootMessage(mc.ID) {
 			event, err := client.GetEvent(roomID, eventID)
 			if err == nil && event.Unsigned.RedactedBecause != nil {
@@ -130,13 +142,6 @@ func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	if eventIDs := stateStore.GetMatrixEventIdsForChatwootMessage(mc.ID); len(eventIDs) > 0 {
 		log.Infof("Chatwoot message with ID %d already has a Matrix Event ID(s): %v", mc.ID, eventIDs)
-		return
-	}
-
-	roomID, err := stateStore.GetMatrixRoomFromChatwootConversation(mc.Conversation.ID)
-	if err != nil {
-		log.Error("No room for ", mc.Conversation.ID)
-		log.Error(err)
 		return
 	}
 

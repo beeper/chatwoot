@@ -120,6 +120,28 @@ func (store *StateStore) GetRoomMembers(roomId mid.RoomID) []mid.UserID {
 	return users
 }
 
+func (store *StateStore) GetNonBotRoomMembers(roomId mid.RoomID) []mid.UserID {
+	rows, err := store.DB.Query(`
+		SELECT user_id
+		FROM room_members
+		WHERE room_id = $1
+		AND user_id != $2
+	`, roomId, store.botUsername)
+	users := make([]mid.UserID, 0)
+	if err != nil {
+		return users
+	}
+	defer rows.Close()
+
+	var userId mid.UserID
+	for rows.Next() {
+		if err := rows.Scan(&userId); err == nil {
+			users = append(users, userId)
+		}
+	}
+	return users
+}
+
 func (store *StateStore) SaveRoom(room *mautrix.Room) {
 	// This isn't really used at all.
 }

@@ -1,14 +1,19 @@
 package store
 
-import "database/sql"
+import (
+	"database/sql"
+
+	mid "maunium.net/go/mautrix/id"
+)
 
 type StateStore struct {
-	DB      *sql.DB
-	dialect string
+	DB          *sql.DB
+	dialect     string
+	botUsername mid.UserID
 }
 
-func NewStateStore(db *sql.DB, dialect string) *StateStore {
-	return &StateStore{DB: db, dialect: dialect}
+func NewStateStore(db *sql.DB, dialect string, botUsername mid.UserID) *StateStore {
+	return &StateStore{DB: db, dialect: dialect, botUsername: botUsername}
 }
 
 func (store *StateStore) CreateTables() error {

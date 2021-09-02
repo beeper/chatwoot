@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	_ "github.com/jackc/pgx/v4/stdlib"
@@ -31,6 +32,8 @@ var stateStore *store.StateStore
 
 var chatwootApi *chatwootapi.ChatwootAPI
 var botHomeserver string
+
+var userSendlocks map[mid.UserID]sync.Mutex
 
 var VERSION = "0.2.1"
 
@@ -129,7 +132,10 @@ func main() {
 		}
 	}()
 
-	stateStore = store.NewStateStore(db, dbDialect)
+	// Initialize the send lock map
+	userSendlocks = map[mid.UserID]sync.Mutex{}
+
+	stateStore = store.NewStateStore(db, dbDialect, username)
 	if err := stateStore.CreateTables(); err != nil {
 		log.Fatal("Failed to create the tables for chatwoot.", err)
 	}
