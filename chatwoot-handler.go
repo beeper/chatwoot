@@ -145,10 +145,13 @@ func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// keep track of the latest Matrix event so we can mark it read
+	var resp *mautrix.RespSendEvent
+
 	message := mc.Conversation.Messages[0]
 
 	if message.Content != nil {
-		resp, err := SendMessage(roomID, mevent.MessageEventContent{
+		resp, err = SendMessage(roomID, mevent.MessageEventContent{
 			MsgType: mevent.MsgText,
 			Body:    *message.Content,
 		})
@@ -204,7 +207,7 @@ func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		resp2, err := SendMessage(roomID, mevent.MessageEventContent{
+		resp, err = SendMessage(roomID, mevent.MessageEventContent{
 			Body:    filename,
 			MsgType: messageType,
 			Info:    &fileInfo,
@@ -213,7 +216,14 @@ func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Error(err)
 		} else {
-			stateStore.SetChatwootMessageIdForMatrixEvent(resp2.EventID, mc.ID)
+			stateStore.SetChatwootMessageIdForMatrixEvent(resp.EventID, mc.ID)
 		}
+	}
+
+	_, err = DoRetry(fmt.Sprintf("send read receipt to %s for event %s", roomID, resp.EventID), func() (interface{}, error) {
+		return nil, client.MarkRead(roomID, resp.EventID)
+	})
+	if err != nil {
+		log.Errorf("Failed to send read receipt to %s for event %s", roomID, resp.EventID)
 	}
 }
