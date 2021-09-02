@@ -48,7 +48,14 @@ func CreateChatwootAPI(baseURL string, accountID int, inboxID int, accessToken s
 		AccountID:   accountID,
 		InboxID:     inboxID,
 		AccessToken: accessToken,
-		Client:      &http.Client{},
+		Client: &http.Client{
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) >= 10 {
+					return errors.New("Too many (>=10) redirects! Cancelling request.")
+				}
+				return nil
+			},
+		},
 	}
 }
 
