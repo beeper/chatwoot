@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -57,11 +58,6 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 		createRoomLock.Unlock()
 	}
 
-	messageType := chatwootapi.IncomingMessage
-	if configuration.Username == event.Sender.String() {
-		messageType = chatwootapi.OutgoingMessage
-	}
-
 	// Ensure that if the webhook event comes through before the message ID
 	// is persisted to the database it will be properly deduplicated.
 	_, found := userSendlocks[event.Sender]
@@ -75,7 +71,28 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 	defer userSendlocks[event.Sender].Unlock()
 
 	content := event.Content.AsMessage()
+	cm, err := DoRetry(fmt.Sprintf("handle matrix event %s in conversation %d", event.ID, conversationID), func() (interface{}, error) {
+		return HandleMatrixMessageContent(event, conversationID, content)
+	})
+	if err != nil {
+		log.Error(err)
+		chatwootApi.SendPrivateMessage(
+			conversationID,
+			fmt.Sprintf("Error occurred while handling a Matrix message. You may have missed a message! Error: %+v", err))
+		return
+	}
+	stateStore.SetChatwootMessageIdForMatrixEvent(event.ID, cm.(*chatwootapi.Message).ID)
+}
+
+func HandleMatrixMessageContent(event *mevent.Event, conversationID int, content *mevent.MessageEventContent) (*chatwootapi.Message, error) {
+	messageType := chatwootapi.IncomingMessage
+	if configuration.Username == event.Sender.String() {
+		messageType = chatwootapi.OutgoingMessage
+	}
+
 	var cm *chatwootapi.Message
+	var err error
+
 	switch content.MsgType {
 	case mevent.MsgText, mevent.MsgNotice:
 		cm, err = chatwootApi.SendTextMessage(conversationID, content.Body, messageType)
@@ -97,37 +114,29 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 		}
 		mxc, err := rawMXC.Parse()
 		if err != nil {
-			log.Errorf("Malformed content URL in %s: %v", event.ID, err)
-			return
+			return nil, errors.New(fmt.Sprintf("Malformed content URL in %s: %+v", event.ID, err))
 		}
 
 		data, err := client.DownloadBytes(mxc)
 		if err != nil {
-			log.Errorf("Failed to download media in %s: %v", event.ID, err)
-			return
+			return nil, errors.New(fmt.Sprintf("Failed to download media in %s: %+v", event.ID, err))
 		}
 
 		if file != nil {
 			data, err = file.Decrypt(data)
 			if err != nil {
-				log.Errorf("Failed to decrypt media in %s: %v", event.ID, err)
-				return
+				return nil, errors.New(fmt.Sprintf("Failed to decrypt media in %s: %+v", event.ID, err))
 			}
 		}
 
 		cm, err = chatwootApi.SendAttachmentMessage(conversationID, content.Body, bytes.NewReader(data), messageType)
 		if err != nil {
-			log.Errorf("Failed to send attachment message. Error: %v", err)
-			return
+			return nil, errors.New(fmt.Sprintf("Failed to send attachment message. Error: %+v", err))
 		}
 		break
 	}
 
-	if err != nil {
-		log.Error(err)
-		return
-	}
-	stateStore.SetChatwootMessageIdForMatrixEvent(event.ID, cm.ID)
+	return cm, err
 }
 
 func HandleRedaction(_ mautrix.EventSource, event *mevent.Event) {

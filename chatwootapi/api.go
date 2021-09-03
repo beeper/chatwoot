@@ -180,9 +180,8 @@ func (api *ChatwootAPI) CreateConversation(sourceID string, contactID int) (*Con
 	return &conversation, nil
 }
 
-func (api *ChatwootAPI) SendTextMessage(conversationID int, content string, messageType MessageType) (*Message, error) {
-	values := map[string]interface{}{"content": content, "message_type": MessageTypeString(messageType), "private": false}
-	jsonValue, _ := json.Marshal(values)
+func (api *ChatwootAPI) doSendTextMessage(conversationID int, jsonValues map[string]interface{}) (*Message, error) {
+	jsonValue, _ := json.Marshal(jsonValues)
 	req, err := http.NewRequest(http.MethodPost, api.MakeUri(fmt.Sprintf("conversations/%d/messages", conversationID)), bytes.NewBuffer(jsonValue))
 	if err != nil {
 		log.Error(err)
@@ -205,6 +204,17 @@ func (api *ChatwootAPI) SendTextMessage(conversationID int, content string, mess
 		return nil, err
 	}
 	return &message, nil
+
+}
+
+func (api *ChatwootAPI) SendTextMessage(conversationID int, content string, messageType MessageType) (*Message, error) {
+	values := map[string]interface{}{"content": content, "message_type": MessageTypeString(messageType), "private": false}
+	return api.doSendTextMessage(conversationID, values)
+}
+
+func (api *ChatwootAPI) SendPrivateMessage(conversationID int, content string) (*Message, error) {
+	values := map[string]interface{}{"content": content, "message_type": MessageTypeString(OutgoingMessage), "private": true}
+	return api.doSendTextMessage(conversationID, values)
 }
 
 func (api *ChatwootAPI) SendAttachmentMessage(conversationID int, filename string, fileData io.Reader, messageType MessageType) (*Message, error) {
