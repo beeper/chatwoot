@@ -168,7 +168,11 @@ func (api *ChatwootAPI) CreateConversation(sourceID string, contactID int) (*Con
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
-		return nil, errors.New(fmt.Sprintf("POST conversations returned non-200 status code: %d", resp.StatusCode))
+		content, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			content = []byte{}
+		}
+		return nil, errors.New(fmt.Sprintf("POST conversations returned non-200 status code: %d: %s", resp.StatusCode, string(content)))
 	}
 
 	decoder := json.NewDecoder(resp.Body)

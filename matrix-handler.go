@@ -15,6 +15,32 @@ import (
 
 var createRoomLock sync.Mutex = sync.Mutex{}
 
+func createChatwootConversation(event *mevent.Event) (int, error) {
+	createRoomLock.Lock()
+	defer createRoomLock.Unlock()
+
+	contactID, err := chatwootApi.ContactIDForMxid(event.Sender)
+	if err != nil {
+		log.Errorf("Contact ID not found for user with MXID: %s. Error: %s", event.Sender, err)
+
+		contactID, err = chatwootApi.CreateContact(event.Sender)
+		if err != nil {
+			return 0, errors.New(fmt.Sprintf("Create contact failed for %s: %s", event.Sender, err))
+		}
+		log.Infof("Contact with ID %d created", contactID)
+	}
+	conversation, err := chatwootApi.CreateConversation(event.RoomID.String(), contactID)
+	if err != nil {
+		return 0, errors.New(fmt.Sprintf("Failed to create chatwoot conversation for %s: %+v", event.RoomID, err))
+	}
+
+	err = stateStore.UpdateConversationIdForRoom(event.RoomID, conversation.ID)
+	if err != nil {
+		return 0, err
+	}
+	return conversation.ID, nil
+}
+
 func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 	if messageID, err := stateStore.GetChatwootMessageIdForMatrixEventId(event.ID); err == nil {
 		log.Info("Matrix Event ID ", event.ID, " already has a Chatwoot message with ID ", messageID)
@@ -27,35 +53,12 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 			log.Warnf("Not creating Chatwoot conversation for %s", event.Sender)
 			return
 		}
-
-		createRoomLock.Lock()
 		log.Errorf("Chatwoot conversation not found for %s: %s", event.RoomID, err)
-		contactID, err := chatwootApi.ContactIDForMxid(event.Sender)
+		conversationID, err = createChatwootConversation(event)
 		if err != nil {
-			log.Errorf("Contact ID not found for user with MXID: %s. Error: %s", event.Sender, err)
-
-			contactID, err = chatwootApi.CreateContact(event.Sender)
-			if err != nil {
-				log.Errorf("Create contact failed for %s: %s", event.Sender, err)
-				createRoomLock.Unlock()
-				return
-			}
-			log.Infof("Contact with ID %d created", contactID)
-		}
-		conversation, err := chatwootApi.CreateConversation(event.RoomID.String(), contactID)
-		if err != nil {
-			log.Error("Failed to create chatwoot conversation for ", event.RoomID)
-			createRoomLock.Unlock()
+			log.Errorf("Error creating chatwoot conversation: %+v", err)
 			return
 		}
-
-		err = stateStore.UpdateConversationIdForRoom(event.RoomID, conversation.ID)
-		if err != nil {
-			log.Error(err)
-			return
-		}
-		conversationID = conversation.ID
-		createRoomLock.Unlock()
 	}
 
 	// Ensure that if the webhook event comes through before the message ID

@@ -76,7 +76,6 @@ func main() {
 		AllowMessagesFromUsersOnOtherHomeservers: false,
 		ChatwootBaseUrl:                          "https://app.chatwoot.com/",
 		ListenPort:                               8080,
-		DBConnectionString:                       "file:chatwoot.db",
 	}
 
 	err = json.Unmarshal(configJson, &configuration)
@@ -100,7 +99,7 @@ func main() {
 		dbDialect = "postgres"
 		break
 	default:
-		log.Fatalf("Invalid database scheme %s", dbUri.Scheme)
+		log.Fatalf("Invalid database scheme '%s'", dbUri.Scheme)
 	}
 
 	db, err := sql.Open(dbType, dbUri.String())
