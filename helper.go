@@ -15,7 +15,7 @@ func DoRetry(description string, fn func() (interface{}, error)) (interface{}, e
 	if err != nil {
 		panic(err)
 	}
-	b = retry.WithMaxRetries(5, b)
+	b = retry.WithMaxRetries(3, b)
 	for {
 		log.Info("trying: ", description)
 		val, err := fn()
