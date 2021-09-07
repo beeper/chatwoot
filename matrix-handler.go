@@ -36,9 +36,26 @@ func createChatwootConversation(event *mevent.Event) (int, error) {
 		}
 		log.Infof("Contact with ID %d created", contactID)
 	}
-	conversation, err := chatwootApi.CreateConversation(event.RoomID.String(), contactID)
-	if err != nil {
-		return 0, errors.New(fmt.Sprintf("Failed to create chatwoot conversation for %s: %+v", event.RoomID, err))
+
+	// Try and find an existing conversation with the user in the
+	// configured inbox.
+	var conversation *chatwootapi.Conversation = nil
+	conversations, err := chatwootApi.GetContactConversations(contactID)
+	if err == nil {
+		for _, c := range conversations {
+			if c.InboxID == configuration.ChatwootInboxID {
+				conversation = &c
+				break
+			}
+		}
+	}
+
+	if conversation == nil {
+		log.Infof("Creating conversation for room %s for contact %d", event.RoomID, contactID)
+		conversation, err = chatwootApi.CreateConversation(event.RoomID.String(), contactID)
+		if err != nil {
+			return 0, errors.New(fmt.Sprintf("Failed to create chatwoot conversation for %s: %+v", event.RoomID, err))
+		}
 	}
 
 	err = stateStore.UpdateConversationIdForRoom(event.RoomID, conversation.ID)
@@ -64,6 +81,7 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 		conversationID, err = createChatwootConversation(event)
 		if err != nil {
 			log.Errorf("Error creating chatwoot conversation: %+v", err)
+			// TODO notify somehow
 			return
 		}
 	}
@@ -114,7 +132,7 @@ func HandleMatrixMessageContent(event *mevent.Event, conversationID int, content
 		break
 
 	case mevent.MsgAudio, mevent.MsgFile, mevent.MsgImage, mevent.MsgVideo:
-		log.Info(content)
+		log.Debug(content)
 
 		var file *mevent.EncryptedFileInfo
 		rawMXC := content.URL
