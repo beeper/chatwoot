@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	_ "image/gif"
@@ -111,55 +112,70 @@ func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			err := json.Unmarshal(webhookBody, &csc)
 			if err != nil {
 				log.Errorf("Error decoding message created webhook body: %+v", err)
-				return
+				break
 			}
-			HandleConversationStatusChanged(csc)
+			conversationID := csc.ID
+			err = HandleConversationStatusChanged(csc)
+			if err != nil {
+				DoRetry(fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func() (interface{}, error) {
+					return chatwootApi.SendPrivateMessage(
+						conversationID,
+						fmt.Sprintf("*Error occurred while handling Chatwoot conversation status changed.*\n\nError: %+v", err))
+				})
+			}
 			break
 		case "message_created":
 			var mc chatwootapi.MessageCreated
-			err := json.Unmarshal(webhookBody, &mc)
+			err = json.Unmarshal(webhookBody, &mc)
 			if err != nil {
 				log.Errorf("Error decoding message created webhook body: %+v", err)
-				return
+				break
 			}
-			HandleMessageCreated(mc)
+			conversationID := mc.Conversation.ID
+			err = HandleMessageCreated(mc)
+			if err != nil {
+				DoRetry(fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func() (interface{}, error) {
+					return chatwootApi.SendPrivateMessage(
+						conversationID,
+						fmt.Sprintf("**Error occurred while handling Chatwoot message. The message may not have been sent to Matrix!**\n\nError: %+v", err))
+				})
+			}
 			break
 		}
 	}
 }
 
-func HandleConversationStatusChanged(csc chatwootapi.ConversationStatusChanged) {
+func HandleConversationStatusChanged(csc chatwootapi.ConversationStatusChanged) error {
 	if csc.Status != "open" {
 		// it's backwards, this means that the conversation was re-opened
-		return
+		return nil
 	}
 
 	roomID, mostRecentEventID, err := stateStore.GetMatrixRoomFromChatwootConversation(csc.ID)
 	if err != nil {
 		log.Error("No room for ", csc.ID)
-		log.Error(err)
-		return
+		return err
 	}
 
 	_, err = DoRetry(fmt.Sprintf("send read receipt to %s for event %s", roomID, mostRecentEventID), func() (interface{}, error) {
 		return nil, client.MarkRead(roomID, mostRecentEventID)
 	})
 	if err != nil {
-		log.Errorf("Failed to send read receipt to %s for event %s", roomID, mostRecentEventID)
+		return errors.New(fmt.Sprintf("Failed to send read receipt to %s for event %s: %+v", roomID, mostRecentEventID, err))
 	}
+	return nil
 }
 
-func HandleMessageCreated(mc chatwootapi.MessageCreated) {
+func HandleMessageCreated(mc chatwootapi.MessageCreated) error {
 	// Skip private messages
 	if mc.Private {
-		return
+		return nil
 	}
 
 	roomID, _, err := stateStore.GetMatrixRoomFromChatwootConversation(mc.Conversation.ID)
 	if err != nil {
 		log.Error("No room for ", mc.Conversation.ID)
-		log.Error(err)
-		return
+		return err
 	}
 
 	// Ensure that if the webhook event comes through before the message ID
@@ -176,6 +192,7 @@ func HandleMessageCreated(mc chatwootapi.MessageCreated) {
 
 	if mc.ContentAttributes != nil && mc.ContentAttributes.Deleted {
 		log.Infof("Message %d deleted", mc.ID)
+		var errs []error
 		for _, eventID := range stateStore.GetMatrixEventIdsForChatwootMessage(mc.ID) {
 			event, err := client.GetEvent(roomID, eventID)
 			if err == nil && event.Unsigned.RedactedBecause != nil {
@@ -183,14 +200,20 @@ func HandleMessageCreated(mc chatwootapi.MessageCreated) {
 				log.Infof("Message %d was already redacted", mc.ID)
 				continue
 			}
-			client.RedactEvent(roomID, eventID)
+			_, err = client.RedactEvent(roomID, eventID)
+			if err != nil {
+				errs = append(errs, err)
+			}
 		}
-		return
+		if len(errs) > 0 {
+			return errors.New(fmt.Sprintf("Errors occurred while redacting messages! %+v", errs))
+		}
+		return nil
 	}
 
 	if eventIDs := stateStore.GetMatrixEventIdsForChatwootMessage(mc.ID); len(eventIDs) > 0 {
 		log.Infof("Chatwoot message with ID %d already has a Matrix Event ID(s): %v", mc.ID, eventIDs)
-		return
+		return nil
 	}
 
 	// keep track of the latest Matrix event so we can mark it read
@@ -199,13 +222,16 @@ func HandleMessageCreated(mc chatwootapi.MessageCreated) {
 	message := mc.Conversation.Messages[0]
 
 	if message.Content != nil {
-		resp, err = SendMessage(roomID, mevent.MessageEventContent{
-			MsgType: mevent.MsgText,
-			Body:    *message.Content,
+		rawResp, err := DoRetry(fmt.Sprintf("send message to %s", roomID), func() (interface{}, error) {
+			return SendMessage(roomID, mevent.MessageEventContent{
+				MsgType: mevent.MsgText,
+				Body:    *message.Content,
+			})
 		})
 		if err != nil {
-			log.Error(err)
+			return err
 		}
+		resp = rawResp.(*mautrix.RespSendEvent)
 		stateStore.SetChatwootMessageIdForMatrixEvent(resp.EventID, mc.ID)
 	}
 
@@ -255,17 +281,19 @@ func HandleMessageCreated(mc chatwootapi.MessageCreated) {
 			}
 		}
 
-		resp, err = SendMessage(roomID, mevent.MessageEventContent{
-			Body:    filename,
-			MsgType: messageType,
-			Info:    &fileInfo,
-			File:    &file,
+		rawResp, err := DoRetry(fmt.Sprintf("send attachment to %s", roomID), func() (interface{}, error) {
+			return SendMessage(roomID, mevent.MessageEventContent{
+				Body:    filename,
+				MsgType: messageType,
+				Info:    &fileInfo,
+				File:    &file,
+			})
 		})
 		if err != nil {
-			log.Error(err)
-		} else {
-			stateStore.SetChatwootMessageIdForMatrixEvent(resp.EventID, mc.ID)
+			return err
 		}
+		resp = rawResp.(*mautrix.RespSendEvent)
+		stateStore.SetChatwootMessageIdForMatrixEvent(resp.EventID, mc.ID)
 	}
 
 	_, err = DoRetry(fmt.Sprintf("send read receipt to %s for event %s", roomID, resp.EventID), func() (interface{}, error) {
@@ -274,4 +302,5 @@ func HandleMessageCreated(mc chatwootapi.MessageCreated) {
 	if err != nil {
 		log.Errorf("Failed to send read receipt to %s for event %s", roomID, resp.EventID)
 	}
+	return nil
 }

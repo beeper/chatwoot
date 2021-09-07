@@ -81,7 +81,6 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 		conversationID, err = createChatwootConversation(event)
 		if err != nil {
 			log.Errorf("Error creating chatwoot conversation: %+v", err)
-			// TODO notify somehow
 			return
 		}
 	}
@@ -108,7 +107,6 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 				conversationID,
 				fmt.Sprintf("**Error occurred while receiving a Matrix message. You may have missed a message!**\n\nError: %+v", err))
 		})
-		// TODO figure out what to do about the error here.
 		return
 	}
 	stateStore.SetChatwootMessageIdForMatrixEvent(event.ID, cm.(*chatwootapi.Message).ID)
