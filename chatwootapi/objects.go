@@ -39,11 +39,19 @@ type Attachment struct {
 
 // Message
 
+type Sender struct {
+	ID            int    `json:"id"`
+	Name          string `json:"name"`
+	Type          string `json:"user"`
+	AvailableName string `json:"available_name"`
+}
+
 type Message struct {
 	ID          int          `json:"id"`
 	Content     *string      `json:"content"`
 	Private     bool         `json:"private"`
 	Attachments []Attachment `json:"attachments"`
+	Sender      Sender       `json:"sender"`
 }
 
 // Conversation

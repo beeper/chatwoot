@@ -225,7 +225,10 @@ func HandleMessageCreated(mc chatwootapi.MessageCreated) error {
 		rawResp, err := DoRetry(fmt.Sprintf("send message to %s", roomID), func() (interface{}, error) {
 			return SendMessage(roomID, mevent.MessageEventContent{
 				MsgType: mevent.MsgText,
-				Body:    *message.Content,
+				Body: fmt.Sprintf(
+					"%s - %s",
+					*message.Content,
+					strings.Split(message.Sender.AvailableName, " ")[0]),
 			})
 		})
 		if err != nil {
