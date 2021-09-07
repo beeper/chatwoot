@@ -113,6 +113,63 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 	stateStore.SetChatwootMessageIdForMatrixEvent(event.ID, cm.(*chatwootapi.Message).ID)
 }
 
+func HandleReaction(_ mautrix.EventSource, event *mevent.Event) {
+	if messageID, err := stateStore.GetChatwootMessageIdForMatrixEventId(event.ID); err == nil {
+		log.Info("Matrix Event ID ", event.ID, " already has a Chatwoot message with ID ", messageID)
+		return
+	}
+
+	conversationID, err := stateStore.GetChatwootConversationFromMatrixRoom(event.RoomID)
+	if err != nil {
+		log.Errorf("Chatwoot conversation not found for %s: %+v", event.RoomID, err)
+		return
+	}
+
+	cm, err := DoRetry(fmt.Sprintf("send notification of reaction to %d", conversationID), func() (interface{}, error) {
+		reaction := event.Content.AsReaction()
+		reactedEvent, err := client.GetEvent(event.RoomID, reaction.RelatesTo.EventID)
+		if err != nil {
+			return nil, errors.New(fmt.Sprintf("Couldn't find reacted to event %s: %+v", reaction.RelatesTo.EventID, err))
+		}
+
+		if reactedEvent.Type == mevent.EventEncrypted {
+			err := reactedEvent.Content.ParseRaw(reactedEvent.Type)
+			if err != nil {
+				return nil, err
+			}
+
+			decryptedEvent, err := olmMachine.DecryptMegolmEvent(reactedEvent)
+			if err != nil {
+				return nil, err
+			}
+			reactedEvent = decryptedEvent
+		}
+
+		reactedMessage := reactedEvent.Content.AsMessage()
+		var reactedMessageText string
+		switch reactedMessage.MsgType {
+		case mevent.MsgText, mevent.MsgNotice, mevent.MsgAudio, mevent.MsgFile, mevent.MsgImage, mevent.MsgVideo:
+			reactedMessageText = reactedMessage.Body
+		case mevent.MsgEmote:
+			localpart, _, _ := event.Sender.Parse()
+			reactedMessageText = fmt.Sprintf(" \\* %s %s", localpart, reactedMessage.Body)
+		}
+		return chatwootApi.SendTextMessage(
+			conversationID,
+			fmt.Sprintf("%s reacted with %s to \"%s\"", event.Sender, reaction.RelatesTo.Key, reactedMessageText),
+			chatwootapi.IncomingMessage)
+	})
+	if err != nil {
+		DoRetry(fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func() (interface{}, error) {
+			return chatwootApi.SendPrivateMessage(
+				conversationID,
+				fmt.Sprintf("**Error occurred while receiving a Matrix reaction. You may have missed a message reaction!**\n\nError: %+v", err))
+		})
+		return
+	}
+	stateStore.SetChatwootMessageIdForMatrixEvent(event.ID, cm.(*chatwootapi.Message).ID)
+}
+
 func HandleMatrixMessageContent(event *mevent.Event, conversationID int, content *mevent.MessageEventContent) (*chatwootapi.Message, error) {
 	messageType := chatwootapi.IncomingMessage
 	if configuration.Username == event.Sender.String() {
