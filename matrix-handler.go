@@ -103,10 +103,12 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 		return HandleMatrixMessageContent(event, conversationID, content)
 	})
 	if err != nil {
-		log.Error(err)
-		chatwootApi.SendPrivateMessage(
-			conversationID,
-			fmt.Sprintf("Error occurred while handling a Matrix message. You may have missed a message! Error: %+v", err))
+		DoRetry(fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func() (interface{}, error) {
+			return chatwootApi.SendPrivateMessage(
+				conversationID,
+				fmt.Sprintf("**Error occurred while receiving a Matrix message. You may have missed a message!**\n\nError: %+v", err))
+		})
+		// TODO figure out what to do about the error here.
 		return
 	}
 	stateStore.SetChatwootMessageIdForMatrixEvent(event.ID, cm.(*chatwootapi.Message).ID)
