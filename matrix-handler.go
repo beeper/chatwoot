@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -123,7 +124,14 @@ func HandleMatrixMessageContent(event *mevent.Event, conversationID int, content
 
 	switch content.MsgType {
 	case mevent.MsgText, mevent.MsgNotice:
-		cm, err = chatwootApi.SendTextMessage(conversationID, content.Body, messageType)
+		relatesTo := content.RelatesTo
+		body := content.Body
+		if relatesTo != nil && relatesTo.Type == mevent.RelReplace {
+			if strings.HasPrefix(body, " * ") {
+				body = " \\* " + body[3:]
+			}
+		}
+		cm, err = chatwootApi.SendTextMessage(conversationID, body, messageType)
 		break
 
 	case mevent.MsgEmote:
