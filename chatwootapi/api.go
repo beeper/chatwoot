@@ -148,6 +148,36 @@ func (api *ChatwootAPI) ContactIDForMxid(userID mid.UserID) (int, error) {
 	return 0, errors.New(fmt.Sprintf("Couldn't find user with user ID %s!", userID))
 }
 
+func (api *ChatwootAPI) GetContactConversations(contactID int) ([]Conversation, error) {
+	req, err := http.NewRequest(http.MethodGet, api.MakeUri(fmt.Sprintf("contacts/%d/conversations", contactID)), nil)
+	if err != nil {
+		log.Error(err)
+		return []Conversation{}, err
+	}
+
+	resp, err := api.DoRequest(req)
+	if err != nil {
+		log.Error(err)
+		return []Conversation{}, err
+	}
+	if resp.StatusCode != 200 {
+		content, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			content = []byte{}
+		}
+		return []Conversation{}, errors.New(fmt.Sprintf("GET contacts/%d/conversation returned non-200 status code: %d. Error: %s", contactID, resp.StatusCode, content))
+	}
+
+	decoder := json.NewDecoder(resp.Body)
+	var conversationsPayload ConversationsPayload
+	err = decoder.Decode(&conversationsPayload)
+	if err != nil {
+		return []Conversation{}, err
+	}
+
+	return conversationsPayload.Payload, nil
+}
+
 func (api *ChatwootAPI) CreateConversation(sourceID string, contactID int) (*Conversation, error) {
 	values := map[string]interface{}{
 		"source_id":  sourceID,
@@ -168,7 +198,11 @@ func (api *ChatwootAPI) CreateConversation(sourceID string, contactID int) (*Con
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
-		return nil, errors.New(fmt.Sprintf("POST conversations returned non-200 status code: %d", resp.StatusCode))
+		content, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			content = []byte{}
+		}
+		return nil, errors.New(fmt.Sprintf("POST conversations returned non-200 status code: %d: %s", resp.StatusCode, string(content)))
 	}
 
 	decoder := json.NewDecoder(resp.Body)
@@ -180,9 +214,8 @@ func (api *ChatwootAPI) CreateConversation(sourceID string, contactID int) (*Con
 	return &conversation, nil
 }
 
-func (api *ChatwootAPI) SendTextMessage(conversationID int, content string, messageType MessageType) (*Message, error) {
-	values := map[string]interface{}{"content": content, "message_type": MessageTypeString(messageType), "private": false}
-	jsonValue, _ := json.Marshal(values)
+func (api *ChatwootAPI) doSendTextMessage(conversationID int, jsonValues map[string]interface{}) (*Message, error) {
+	jsonValue, _ := json.Marshal(jsonValues)
 	req, err := http.NewRequest(http.MethodPost, api.MakeUri(fmt.Sprintf("conversations/%d/messages", conversationID)), bytes.NewBuffer(jsonValue))
 	if err != nil {
 		log.Error(err)
@@ -195,7 +228,11 @@ func (api *ChatwootAPI) SendTextMessage(conversationID int, content string, mess
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
-		return nil, errors.New(fmt.Sprintf("POST conversations returned non-200 status code: %d", resp.StatusCode))
+		content, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			content = []byte{}
+		}
+		return nil, errors.New(fmt.Sprintf("POST conversations/%d/messages returned non-200 status code: %d: %s", conversationID, resp.StatusCode, string(content)))
 	}
 
 	decoder := json.NewDecoder(resp.Body)
@@ -205,6 +242,17 @@ func (api *ChatwootAPI) SendTextMessage(conversationID int, content string, mess
 		return nil, err
 	}
 	return &message, nil
+
+}
+
+func (api *ChatwootAPI) SendTextMessage(conversationID int, content string, messageType MessageType) (*Message, error) {
+	values := map[string]interface{}{"content": content, "message_type": MessageTypeString(messageType), "private": false}
+	return api.doSendTextMessage(conversationID, values)
+}
+
+func (api *ChatwootAPI) SendPrivateMessage(conversationID int, content string) (*Message, error) {
+	values := map[string]interface{}{"content": content, "message_type": MessageTypeString(OutgoingMessage), "private": true}
+	return api.doSendTextMessage(conversationID, values)
 }
 
 func (api *ChatwootAPI) SendAttachmentMessage(conversationID int, filename string, fileData io.Reader, messageType MessageType) (*Message, error) {
@@ -257,7 +305,11 @@ func (api *ChatwootAPI) SendAttachmentMessage(conversationID int, filename strin
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
-		return nil, errors.New(fmt.Sprintf("POST conversations returned non-200 status code: %d", resp.StatusCode))
+		content, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			content = []byte{}
+		}
+		return nil, errors.New(fmt.Sprintf("POST conversations/%d/messages returned non-200 status code: %d: %s", conversationID, resp.StatusCode, string(content)))
 	}
 
 	decoder := json.NewDecoder(resp.Body)

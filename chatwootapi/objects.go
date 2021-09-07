@@ -55,6 +55,10 @@ type Conversation struct {
 	Messages  []Message `json:"messages"`
 }
 
+type ConversationsPayload struct {
+	Payload []Conversation `json:"payload"`
+}
+
 // Content Attributes
 
 type ContentAttributes struct {

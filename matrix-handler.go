@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -13,6 +14,56 @@ import (
 )
 
 var createRoomLock sync.Mutex = sync.Mutex{}
+
+func createChatwootConversation(event *mevent.Event) (int, error) {
+	log.Debug("Acquired create room lock")
+	createRoomLock.Lock()
+	defer log.Debug("Released create room lock")
+	defer createRoomLock.Unlock()
+
+	conversationID, err := stateStore.GetChatwootConversationFromMatrixRoom(event.RoomID)
+	if err == nil {
+		return conversationID, nil
+	}
+
+	contactID, err := chatwootApi.ContactIDForMxid(event.Sender)
+	if err != nil {
+		log.Errorf("Contact ID not found for user with MXID: %s. Error: %s", event.Sender, err)
+
+		contactID, err = chatwootApi.CreateContact(event.Sender)
+		if err != nil {
+			return 0, errors.New(fmt.Sprintf("Create contact failed for %s: %s", event.Sender, err))
+		}
+		log.Infof("Contact with ID %d created", contactID)
+	}
+
+	// Try and find an existing conversation with the user in the
+	// configured inbox.
+	var conversation *chatwootapi.Conversation = nil
+	conversations, err := chatwootApi.GetContactConversations(contactID)
+	if err == nil {
+		for _, c := range conversations {
+			if c.InboxID == configuration.ChatwootInboxID {
+				conversation = &c
+				break
+			}
+		}
+	}
+
+	if conversation == nil {
+		log.Infof("Creating conversation for room %s for contact %d", event.RoomID, contactID)
+		conversation, err = chatwootApi.CreateConversation(event.RoomID.String(), contactID)
+		if err != nil {
+			return 0, errors.New(fmt.Sprintf("Failed to create chatwoot conversation for %s: %+v", event.RoomID, err))
+		}
+	}
+
+	err = stateStore.UpdateConversationIdForRoom(event.RoomID, conversation.ID)
+	if err != nil {
+		return 0, err
+	}
+	return conversation.ID, nil
+}
 
 func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 	if messageID, err := stateStore.GetChatwootMessageIdForMatrixEventId(event.ID); err == nil {
@@ -26,40 +77,12 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 			log.Warnf("Not creating Chatwoot conversation for %s", event.Sender)
 			return
 		}
-
-		createRoomLock.Lock()
 		log.Errorf("Chatwoot conversation not found for %s: %s", event.RoomID, err)
-		contactID, err := chatwootApi.ContactIDForMxid(event.Sender)
+		conversationID, err = createChatwootConversation(event)
 		if err != nil {
-			log.Errorf("Contact ID not found for user with MXID: %s. Error: %s", event.Sender, err)
-
-			contactID, err = chatwootApi.CreateContact(event.Sender)
-			if err != nil {
-				log.Errorf("Create contact failed for %s: %s", event.Sender, err)
-				createRoomLock.Unlock()
-				return
-			}
-			log.Infof("Contact with ID %d created", contactID)
-		}
-		conversation, err := chatwootApi.CreateConversation(event.RoomID.String(), contactID)
-		if err != nil {
-			log.Error("Failed to create chatwoot conversation for ", event.RoomID)
-			createRoomLock.Unlock()
+			log.Errorf("Error creating chatwoot conversation: %+v", err)
 			return
 		}
-
-		err = stateStore.UpdateConversationIdForRoom(event.RoomID, conversation.ID)
-		if err != nil {
-			log.Error(err)
-			return
-		}
-		conversationID = conversation.ID
-		createRoomLock.Unlock()
-	}
-
-	messageType := chatwootapi.IncomingMessage
-	if configuration.Username == event.Sender.String() {
-		messageType = chatwootapi.OutgoingMessage
 	}
 
 	// Ensure that if the webhook event comes through before the message ID
@@ -71,11 +94,33 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 	}
 	userSendlocks[event.Sender].Lock()
 	log.Debugf("[matrix-handler] Acquired send lock for %s", event.Sender)
-	defer log.Debugf("[matrix-handler] Unlocked send lock for %s", event.Sender)
+	defer log.Debugf("[matrix-handler] Released send lock for %s", event.Sender)
 	defer userSendlocks[event.Sender].Unlock()
 
 	content := event.Content.AsMessage()
+	cm, err := DoRetry(fmt.Sprintf("handle matrix event %s in conversation %d", event.ID, conversationID), func() (interface{}, error) {
+		return HandleMatrixMessageContent(event, conversationID, content)
+	})
+	if err != nil {
+		DoRetry(fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func() (interface{}, error) {
+			return chatwootApi.SendPrivateMessage(
+				conversationID,
+				fmt.Sprintf("**Error occurred while receiving a Matrix message. You may have missed a message!**\n\nError: %+v", err))
+		})
+		return
+	}
+	stateStore.SetChatwootMessageIdForMatrixEvent(event.ID, cm.(*chatwootapi.Message).ID)
+}
+
+func HandleMatrixMessageContent(event *mevent.Event, conversationID int, content *mevent.MessageEventContent) (*chatwootapi.Message, error) {
+	messageType := chatwootapi.IncomingMessage
+	if configuration.Username == event.Sender.String() {
+		messageType = chatwootapi.OutgoingMessage
+	}
+
 	var cm *chatwootapi.Message
+	var err error
+
 	switch content.MsgType {
 	case mevent.MsgText, mevent.MsgNotice:
 		cm, err = chatwootApi.SendTextMessage(conversationID, content.Body, messageType)
@@ -87,7 +132,7 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 		break
 
 	case mevent.MsgAudio, mevent.MsgFile, mevent.MsgImage, mevent.MsgVideo:
-		log.Info(content)
+		log.Debug(content)
 
 		var file *mevent.EncryptedFileInfo
 		rawMXC := content.URL
@@ -97,37 +142,29 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 		}
 		mxc, err := rawMXC.Parse()
 		if err != nil {
-			log.Errorf("Malformed content URL in %s: %v", event.ID, err)
-			return
+			return nil, errors.New(fmt.Sprintf("Malformed content URL in %s: %+v", event.ID, err))
 		}
 
 		data, err := client.DownloadBytes(mxc)
 		if err != nil {
-			log.Errorf("Failed to download media in %s: %v", event.ID, err)
-			return
+			return nil, errors.New(fmt.Sprintf("Failed to download media in %s: %+v", event.ID, err))
 		}
 
 		if file != nil {
 			data, err = file.Decrypt(data)
 			if err != nil {
-				log.Errorf("Failed to decrypt media in %s: %v", event.ID, err)
-				return
+				return nil, errors.New(fmt.Sprintf("Failed to decrypt media in %s: %+v", event.ID, err))
 			}
 		}
 
 		cm, err = chatwootApi.SendAttachmentMessage(conversationID, content.Body, bytes.NewReader(data), messageType)
 		if err != nil {
-			log.Errorf("Failed to send attachment message. Error: %v", err)
-			return
+			return nil, errors.New(fmt.Sprintf("Failed to send attachment message. Error: %+v", err))
 		}
 		break
 	}
 
-	if err != nil {
-		log.Error(err)
-		return
-	}
-	stateStore.SetChatwootMessageIdForMatrixEvent(event.ID, cm.ID)
+	return cm, err
 }
 
 func HandleRedaction(_ mautrix.EventSource, event *mevent.Event) {
