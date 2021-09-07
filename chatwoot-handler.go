@@ -169,7 +169,7 @@ func HandleMessageCreated(mc chatwootapi.MessageCreated) {
 		if found {
 			userSendlocks[userID].Lock()
 			log.Debugf("[chatwoot-handler] Acquired send lock for %s", userID)
-			defer log.Debugf("[chatwoot-handler] Unlocked send lock for %s", userID)
+			defer log.Debugf("[chatwoot-handler] Released send lock for %s", userID)
 			defer userSendlocks[userID].Unlock()
 		}
 	}

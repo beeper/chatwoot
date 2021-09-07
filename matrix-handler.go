@@ -16,8 +16,15 @@ import (
 var createRoomLock sync.Mutex = sync.Mutex{}
 
 func createChatwootConversation(event *mevent.Event) (int, error) {
+	log.Debug("Acquired create room lock")
 	createRoomLock.Lock()
+	defer log.Debug("Released create room lock")
 	defer createRoomLock.Unlock()
+
+	conversationID, err := stateStore.GetChatwootConversationFromMatrixRoom(event.RoomID)
+	if err == nil {
+		return conversationID, nil
+	}
 
 	contactID, err := chatwootApi.ContactIDForMxid(event.Sender)
 	if err != nil {
@@ -70,7 +77,7 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 	}
 	userSendlocks[event.Sender].Lock()
 	log.Debugf("[matrix-handler] Acquired send lock for %s", event.Sender)
-	defer log.Debugf("[matrix-handler] Unlocked send lock for %s", event.Sender)
+	defer log.Debugf("[matrix-handler] Released send lock for %s", event.Sender)
 	defer userSendlocks[event.Sender].Unlock()
 
 	content := event.Content.AsMessage()
