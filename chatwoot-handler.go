@@ -19,6 +19,7 @@ import (
 	mcrypto "maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/crypto/attachment"
 	mevent "maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/format"
 	mid "maunium.net/go/mautrix/id"
 
 	"gitlab.com/beeper/chatwoot/chatwootapi"
@@ -222,14 +223,11 @@ func HandleMessageCreated(mc chatwootapi.MessageCreated) error {
 	message := mc.Conversation.Messages[0]
 
 	if message.Content != nil {
+		messageEventContent := format.RenderMarkdown(
+			fmt.Sprintf("%s - %s", *message.Content, strings.Split(message.Sender.AvailableName, " ")[0]),
+			true, true)
 		rawResp, err := DoRetry(fmt.Sprintf("send message to %s", roomID), func() (interface{}, error) {
-			return SendMessage(roomID, mevent.MessageEventContent{
-				MsgType: mevent.MsgText,
-				Body: fmt.Sprintf(
-					"%s - %s",
-					*message.Content,
-					strings.Split(message.Sender.AvailableName, " ")[0]),
-			})
+			return SendMessage(roomID, messageEventContent)
 		})
 		if err != nil {
 			return err
