@@ -38,25 +38,10 @@ func createChatwootConversation(event *mevent.Event) (int, error) {
 		log.Infof("Contact with ID %d created", contactID)
 	}
 
-	// Try and find an existing conversation with the user in the
-	// configured inbox.
-	var conversation *chatwootapi.Conversation = nil
-	conversations, err := chatwootApi.GetContactConversations(contactID)
-	if err == nil {
-		for _, c := range conversations {
-			if c.InboxID == configuration.ChatwootInboxID {
-				conversation = &c
-				break
-			}
-		}
-	}
-
-	if conversation == nil {
-		log.Infof("Creating conversation for room %s for contact %d", event.RoomID, contactID)
-		conversation, err = chatwootApi.CreateConversation(event.RoomID.String(), contactID)
-		if err != nil {
-			return 0, errors.New(fmt.Sprintf("Failed to create chatwoot conversation for %s: %+v", event.RoomID, err))
-		}
+	log.Infof("Creating conversation for room %s for contact %d", event.RoomID, contactID)
+	conversation, err := chatwootApi.CreateConversation(event.RoomID.String(), contactID)
+	if err != nil {
+		return 0, errors.New(fmt.Sprintf("Failed to create chatwoot conversation for %s: %+v", event.RoomID, err))
 	}
 
 	err = stateStore.UpdateConversationIdForRoom(event.RoomID, conversation.ID)
