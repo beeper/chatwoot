@@ -18,10 +18,11 @@ type Configuration struct {
 	ChatwootInboxID         int
 
 	// Database settings
-	DBConnectionString      string
+	DBConnectionString string
 
 	// Bot settings
 	AllowMessagesFromUsersOnOtherHomeservers bool
+	CanonicalDMPrefix                        string
 
 	// Webhook listener settings
 	ListenPort int

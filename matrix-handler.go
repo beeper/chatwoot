@@ -22,8 +22,7 @@ func createChatwootConversation(event *mevent.Event) (int, error) {
 	defer log.Debug("Released create room lock")
 	defer createRoomLock.Unlock()
 
-	conversationID, err := stateStore.GetChatwootConversationFromMatrixRoom(event.RoomID)
-	if err == nil {
+	if conversationID, err := stateStore.GetChatwootConversationFromMatrixRoom(event.RoomID); err == nil {
 		return conversationID, nil
 	}
 
@@ -48,6 +47,21 @@ func createChatwootConversation(event *mevent.Event) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+
+	// Detect if this is the canonical DM
+	if configuration.CanonicalDMPrefix != "" {
+		var roomNameEvent mevent.RoomNameEventContent
+		err = client.StateEvent(event.RoomID, mevent.StateRoomName, "", &roomNameEvent)
+		if err == nil {
+			if strings.HasPrefix(roomNameEvent.Name, configuration.CanonicalDMPrefix) {
+				err = chatwootApi.AddConversationLabel(conversation.ID, []string{"canonical-dm"})
+				if err != nil {
+					log.Error(err)
+				}
+			}
+		}
+	}
+
 	return conversation.ID, nil
 }
 

@@ -184,6 +184,30 @@ func (api *ChatwootAPI) CreateConversation(sourceID string, contactID int) (*Con
 	return &conversation, nil
 }
 
+func (api *ChatwootAPI) AddConversationLabel(conversationID int, labels []string) error {
+	jsonValue, err := json.Marshal(map[string]interface{}{"labels": labels})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(http.MethodPost, api.MakeUri(fmt.Sprintf("conversations/%d/labels", conversationID)), bytes.NewBuffer(jsonValue))
+	if err != nil {
+		return err
+	}
+
+	resp, err := api.DoRequest(req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != 200 {
+		content, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			content = []byte{}
+		}
+		return errors.New(fmt.Sprintf("POST conversations returned non-200 status code: %d: %s", resp.StatusCode, string(content)))
+	}
+	return nil
+}
+
 func (api *ChatwootAPI) doSendTextMessage(conversationID int, jsonValues map[string]interface{}) (*Message, error) {
 	jsonValue, _ := json.Marshal(jsonValues)
 	req, err := http.NewRequest(http.MethodPost, api.MakeUri(fmt.Sprintf("conversations/%d/messages", conversationID)), bytes.NewBuffer(jsonValue))
