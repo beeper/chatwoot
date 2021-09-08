@@ -124,7 +124,7 @@ func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 			break
-		case "message_created":
+		case "message_created", "message_updated":
 			var mc chatwootapi.MessageCreated
 			err = json.Unmarshal(webhookBody, &mc)
 			if err != nil {
@@ -178,18 +178,7 @@ func HandleMessageCreated(mc chatwootapi.MessageCreated) error {
 		return err
 	}
 
-	// Ensure that if the webhook event comes through before the message ID
-	// is persisted to the database it will be properly deduplicated.
-	for _, userID := range stateStore.GetNonBotRoomMembers(roomID) {
-		_, found := userSendlocks[userID]
-		if found {
-			userSendlocks[userID].Lock()
-			log.Debugf("[chatwoot-handler] Acquired send lock for %s", userID)
-			defer log.Debugf("[chatwoot-handler] Released send lock for %s", userID)
-			defer userSendlocks[userID].Unlock()
-		}
-	}
-
+	// Handle deletions first.
 	if mc.ContentAttributes != nil && mc.ContentAttributes.Deleted {
 		log.Infof("Message %d deleted", mc.ID)
 		var errs []error
@@ -211,6 +200,17 @@ func HandleMessageCreated(mc chatwootapi.MessageCreated) error {
 		return nil
 	}
 
+	// Ensure that if the webhook event comes through before the message ID
+	// is persisted to the database it will be properly deduplicated.
+	for _, userID := range stateStore.GetNonBotRoomMembers(roomID) {
+		_, found := userSendlocks[userID]
+		if found {
+			userSendlocks[userID].Lock()
+			log.Debugf("[chatwoot-handler] Acquired send lock for %s", userID)
+			defer log.Debugf("[chatwoot-handler] Released send lock for %s", userID)
+			defer userSendlocks[userID].Unlock()
+		}
+	}
 	if eventIDs := stateStore.GetMatrixEventIdsForChatwootMessage(mc.ID); len(eventIDs) > 0 {
 		log.Infof("Chatwoot message with ID %d already has a Matrix Event ID(s): %v", mc.ID, eventIDs)
 		return nil
