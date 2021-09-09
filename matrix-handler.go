@@ -74,9 +74,15 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 	conversationID, err := stateStore.GetChatwootConversationFromMatrixRoom(event.RoomID)
 	if err != nil {
 		if configuration.Username == event.Sender.String() {
-			log.Warnf("Not creating Chatwoot conversation for %s", event.Sender)
+			log.Warnf("Not creating Chatwoot conversation for %s in %s", event.Sender, event.RoomID)
 			return
 		}
+
+		if configuration.BridgeIfMembersLessThan >= 0 && len(stateStore.GetRoomMembers(event.RoomID)) >= configuration.BridgeIfMembersLessThan {
+			log.Warnf("Not creating Chatwoot conversation for %s because there are not less than %d members.", event.RoomID, configuration.BridgeIfMembersLessThan)
+			return
+		}
+
 		log.Errorf("Chatwoot conversation not found for %s: %s", event.RoomID, err)
 		conversationID, err = createChatwootConversation(event)
 		if err != nil {

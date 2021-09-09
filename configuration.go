@@ -12,6 +12,8 @@ type Configuration struct {
 	Homeserver              string
 	Username                string
 	PasswordFile            string
+
+	// Chatwoot Authentication
 	ChatwootBaseUrl         string
 	ChatwootAccessTokenFile string
 	ChatwootAccountID       int
@@ -23,6 +25,7 @@ type Configuration struct {
 	// Bot settings
 	AllowMessagesFromUsersOnOtherHomeservers bool
 	CanonicalDMPrefix                        string
+	BridgeIfMembersLessThan                  int
 
 	// Webhook listener settings
 	ListenPort int
