@@ -239,7 +239,7 @@ func HandleMatrixMessageContent(event *mevent.Event, conversationID int, content
 			}
 		}
 
-		cm, err = chatwootApi.SendAttachmentMessage(conversationID, content.Body, bytes.NewReader(data), messageType)
+		cm, err = chatwootApi.SendAttachmentMessage(conversationID, content.Body, content.Info.MimeType, bytes.NewReader(data), messageType)
 		if err != nil {
 			return nil, errors.New(fmt.Sprintf("Failed to send attachment message. Error: %+v", err))
 		}

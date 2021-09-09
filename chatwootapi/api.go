@@ -9,8 +9,10 @@ import (
 	"io/ioutil"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"path"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 	mid "maunium.net/go/mautrix/id"
@@ -249,7 +251,9 @@ func (api *ChatwootAPI) SendPrivateMessage(conversationID int, content string) (
 	return api.doSendTextMessage(conversationID, values)
 }
 
-func (api *ChatwootAPI) SendAttachmentMessage(conversationID int, filename string, fileData io.Reader, messageType MessageType) (*Message, error) {
+var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
+
+func (api *ChatwootAPI) SendAttachmentMessage(conversationID int, filename string, mimeType string, fileData io.Reader, messageType MessageType) (*Message, error) {
 	bodyBuf := &bytes.Buffer{}
 	bodyWriter := multipart.NewWriter(bodyBuf)
 
@@ -274,7 +278,16 @@ func (api *ChatwootAPI) SendAttachmentMessage(conversationID int, filename strin
 	}
 	messageTypeFieldWriter.Write([]byte(MessageTypeString(messageType)))
 
-	fileWriter, err := bodyWriter.CreateFormFile("attachments[]", filename)
+	h := make(textproto.MIMEHeader)
+	h.Set(
+		"Content-Disposition",
+		fmt.Sprintf(`form-data; name="attachments[]"; filename="%s"`, quoteEscaper.Replace(filename)))
+	if mimeType != "" {
+		h.Set("Content-Type", mimeType)
+	} else {
+		h.Set("Content-Type", "application/octet-stream")
+	}
+	fileWriter, err := bodyWriter.CreatePart(h)
 	if err != nil {
 		log.Error(err)
 		return nil, err
