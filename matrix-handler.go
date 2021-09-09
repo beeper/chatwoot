@@ -93,8 +93,8 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 		userSendlocks[event.Sender] = &sync.Mutex{}
 	}
 	userSendlocks[event.Sender].Lock()
-	log.Debugf("[matrix-handler] Acquired send lock for %s", event.Sender)
-	defer log.Debugf("[matrix-handler] Released send lock for %s", event.Sender)
+	log.Debugf("[message handler] Acquired send lock for %s", event.Sender)
+	defer log.Debugf("[message handler] Released send lock for %s", event.Sender)
 	defer userSendlocks[event.Sender].Unlock()
 
 	content := event.Content.AsMessage()
@@ -123,6 +123,18 @@ func HandleReaction(_ mautrix.EventSource, event *mevent.Event) {
 		log.Errorf("Chatwoot conversation not found for %s: %+v", event.RoomID, err)
 		return
 	}
+
+	// Ensure that if the webhook event comes through before the message ID
+	// is persisted to the database it will be properly deduplicated.
+	_, found := userSendlocks[event.Sender]
+	if !found {
+		log.Debugf("Creating send lock for %s", event.Sender)
+		userSendlocks[event.Sender] = &sync.Mutex{}
+	}
+	userSendlocks[event.Sender].Lock()
+	log.Debugf("[reaction handler] Acquired send lock for %s", event.Sender)
+	defer log.Debugf("[reaction handler] Released send lock for %s", event.Sender)
+	defer userSendlocks[event.Sender].Unlock()
 
 	cm, err := DoRetry(fmt.Sprintf("send notification of reaction to %d", conversationID), func() (interface{}, error) {
 		reaction := event.Content.AsReaction()
@@ -237,6 +249,18 @@ func HandleRedaction(_ mautrix.EventSource, event *mevent.Event) {
 		log.Warn("No Chatwoot conversation associated with ", event.RoomID)
 		return
 	}
+
+	// Ensure that no sends are in progress before we try and redact
+	// anything.
+	_, found := userSendlocks[event.Sender]
+	if !found {
+		log.Debugf("Creating send lock for %s", event.Sender)
+		userSendlocks[event.Sender] = &sync.Mutex{}
+	}
+	userSendlocks[event.Sender].Lock()
+	log.Debugf("[redaction handler] Acquired send lock for %s", event.Sender)
+	defer log.Debugf("[redaction handler] Released send lock for %s", event.Sender)
+	defer userSendlocks[event.Sender].Unlock()
 
 	messageID, err := stateStore.GetChatwootMessageIdForMatrixEventId(event.Redacts)
 	if err != nil {
