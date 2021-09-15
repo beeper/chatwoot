@@ -194,7 +194,7 @@ func main() {
 		db,
 		dbDialect,
 		username.String(),
-		mid.DeviceID("Bot Host"),
+		client.DeviceID,
 		[]byte("chatwoot_cryptostore_key"),
 		CryptoLogger{},
 	)
