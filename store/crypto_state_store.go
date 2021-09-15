@@ -17,12 +17,12 @@ func (store *StateStore) IsEncrypted(roomID mid.RoomID) bool {
 	return store.GetEncryptionEvent(roomID) != nil
 }
 
-func (store *StateStore) GetEncryptionEvent(roomId mid.RoomID) *mevent.EncryptionEventContent {
-	row := store.DB.QueryRow("SELECT encryption_event FROM rooms WHERE room_id = $1", roomId)
+func (store *StateStore) GetEncryptionEvent(roomID mid.RoomID) *mevent.EncryptionEventContent {
+	row := store.DB.QueryRow("SELECT encryption_event FROM rooms WHERE room_id = $1", roomID)
 
 	var encryptionEventJson []byte
 	if err := row.Scan(&encryptionEventJson); err != nil {
-		log.Errorf("Failed to find encryption event JSON: %s. Error: %s", encryptionEventJson, err)
+		log.Errorf("Failed to find encryption event JSON for %s: %s. Error: %s", roomID, encryptionEventJson, err)
 		return nil
 	}
 	var encryptionEvent mevent.EncryptionEventContent
@@ -99,6 +99,7 @@ func (store *StateStore) SetEncryptionEvent(event *mevent.Event) {
 	if _, err := tx.Exec(upsert, event.RoomID, encryptionEventJson); err != nil {
 		tx.Rollback()
 		log.Error(err)
+		return
 	}
 
 	tx.Commit()
