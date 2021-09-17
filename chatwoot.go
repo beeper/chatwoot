@@ -135,45 +135,36 @@ func main() {
 		log.Fatal("Failed to create the tables for chatwoot.", err)
 	}
 
-	// login to homeserver
-	if access_token, err := stateStore.GetAccessToken(); err == nil && access_token != "" {
-		log.Infof("Got access token: %s", access_token)
-		client, err = mautrix.NewClient(configuration.Homeserver, username, access_token)
-		if err != nil {
-			log.Fatalf("Couldn't login to the homeserver.")
-		}
-	} else {
-		log.Info("Using username/password auth")
-		// Use password authentication if we didn't have an access
-		// token yet.
-		password, err := configuration.GetPassword()
-		if err != nil {
-			log.Fatalf("Could not read password from %s", configuration.PasswordFile)
-		}
-		client, err = mautrix.NewClient(configuration.Homeserver, "", "")
-		if err != nil {
-			panic(err)
-		}
-		_, err = DoRetry("login", func() (interface{}, error) {
-			return client.Login(&mautrix.ReqLogin{
-				Type: mautrix.AuthTypePassword,
-				Identifier: mautrix.UserIdentifier{
-					Type: mautrix.IdentifierTypeUser,
-					User: username.String(),
-				},
-				Password:                 password,
-				InitialDeviceDisplayName: "chatwoot",
-				StoreCredentials:         true,
-			})
-		})
-		if err != nil {
-			log.Fatalf("Couldn't login to the homeserver.")
-		}
-
-		if err := stateStore.SetAccessToken(client.AccessToken); err != nil {
-			log.Fatalf("Couldn't set access token %+v", err)
-		}
+	log.Info("Using username/password auth")
+	password, err := configuration.GetPassword()
+	if err != nil {
+		log.Fatalf("Could not read password from %s", configuration.PasswordFile)
 	}
+	deviceID := FindDeviceID(db, username.String())
+	if len(deviceID) > 0 {
+		log.Info("Found existing device ID in database:", deviceID)
+	}
+	client, err = mautrix.NewClient(configuration.Homeserver, "", "")
+	if err != nil {
+		panic(err)
+	}
+	_, err = DoRetry("login", func() (interface{}, error) {
+		return client.Login(&mautrix.ReqLogin{
+			Type: mautrix.AuthTypePassword,
+			Identifier: mautrix.UserIdentifier{
+				Type: mautrix.IdentifierTypeUser,
+				User: username.String(),
+			},
+			Password:                 password,
+			InitialDeviceDisplayName: "chatwoot",
+			DeviceID:                 deviceID,
+			StoreCredentials:         true,
+		})
+	})
+	if err != nil {
+		log.Fatalf("Couldn't login to the homeserver.")
+	}
+	log.Infof("Logged in as %s/%s", client.UserID, client.DeviceID)
 
 	// set the client store on the client.
 	client.Store = stateStore
@@ -290,6 +281,14 @@ func main() {
 	http.HandleFunc("/webhook", HandleWebhook)
 	log.Infof("Webhook listening on port %d", configuration.ListenPort)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", configuration.ListenPort), nil))
+}
+
+func FindDeviceID(db *sql.DB, accountID string) (deviceID mid.DeviceID) {
+	err := db.QueryRow("SELECT device_id FROM crypto_account WHERE account_id=$1", accountID).Scan(&deviceID)
+	if err != nil && err != sql.ErrNoRows {
+		log.Warnf("Failed to scan device ID: %v", err)
+	}
+	return
 }
 
 func VerifyFromAuthorizedUser(sender mid.UserID) bool {
