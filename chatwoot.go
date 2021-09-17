@@ -213,10 +213,7 @@ func main() {
 	syncer := client.Syncer.(*mautrix.DefaultSyncer)
 	// Hook up the OlmMachine into the Matrix client so it receives e2ee
 	// keys and other such things.
-	syncer.OnSync(func(resp *mautrix.RespSync, since string) bool {
-		olmMachine.ProcessSyncResponse(resp, since)
-		return true
-	})
+	syncer.OnSync(olmMachine.ProcessSyncResponse)
 
 	syncer.OnEventType(mevent.StateMember, func(_ mautrix.EventSource, event *mevent.Event) {
 		olmMachine.HandleMemberEvent(event)
