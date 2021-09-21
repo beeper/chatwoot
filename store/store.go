@@ -24,12 +24,6 @@ func (store *StateStore) CreateTables() error {
 
 	queries := []string{
 		`
-		CREATE TABLE IF NOT EXISTS chatwoot_meta (
-			meta_id       INTEGER PRIMARY KEY,
-			access_token  VARCHAR(255)
-		)
-		`,
-		`
 		CREATE TABLE IF NOT EXISTS user_filter_ids (
 			user_id    VARCHAR(255) PRIMARY KEY,
 			filter_id  VARCHAR(255)
