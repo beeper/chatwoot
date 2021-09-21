@@ -252,7 +252,7 @@ func main() {
 
 		decryptedEvent, err := olmMachine.DecryptMegolmEvent(event)
 		if err != nil {
-			log.Warnf("Failed to decrypt message from %s in %s: %+v", event.Sender, event.RoomID, err)
+			log.Errorf("Failed to decrypt message from %s in %s: %+v", event.Sender, event.RoomID, err)
 		} else {
 			log.Debugf("Received encrypted event from %s in %s", event.Sender, event.RoomID)
 			if decryptedEvent.Type == mevent.EventMessage {
