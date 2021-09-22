@@ -10,40 +10,41 @@ import (
 	log "github.com/sirupsen/logrus"
 	"maunium.net/go/mautrix"
 	mevent "maunium.net/go/mautrix/event"
+	mid "maunium.net/go/mautrix/id"
 
 	"gitlab.com/beeper/chatwoot/chatwootapi"
 )
 
 var createRoomLock sync.Mutex = sync.Mutex{}
 
-func createChatwootConversation(event *mevent.Event) (int, error) {
+func createChatwootConversation(roomID mid.RoomID, contactMxid mid.UserID) (int, error) {
 	log.Debug("Acquired create room lock")
 	createRoomLock.Lock()
 	defer log.Debug("Released create room lock")
 	defer createRoomLock.Unlock()
 
-	if conversationID, err := stateStore.GetChatwootConversationFromMatrixRoom(event.RoomID); err == nil {
+	if conversationID, err := stateStore.GetChatwootConversationFromMatrixRoom(roomID); err == nil {
 		return conversationID, nil
 	}
 
-	contactID, err := chatwootApi.ContactIDForMxid(event.Sender)
+	contactID, err := chatwootApi.ContactIDForMxid(contactMxid)
 	if err != nil {
-		log.Errorf("Contact ID not found for user with MXID: %s. Error: %s", event.Sender, err)
+		log.Errorf("Contact ID not found for user with MXID: %s. Error: %s", contactMxid, err)
 
-		contactID, err = chatwootApi.CreateContact(event.Sender)
+		contactID, err = chatwootApi.CreateContact(contactMxid)
 		if err != nil {
-			return 0, errors.New(fmt.Sprintf("Create contact failed for %s: %s", event.Sender, err))
+			return 0, errors.New(fmt.Sprintf("Create contact failed for %s: %s", contactMxid, err))
 		}
 		log.Infof("Contact with ID %d created", contactID)
 	}
 
-	log.Infof("Creating conversation for room %s for contact %d", event.RoomID, contactID)
-	conversation, err := chatwootApi.CreateConversation(event.RoomID.String(), contactID)
+	log.Infof("Creating conversation for room %s for contact %d", roomID, contactID)
+	conversation, err := chatwootApi.CreateConversation(roomID.String(), contactID)
 	if err != nil {
-		return 0, errors.New(fmt.Sprintf("Failed to create chatwoot conversation for %s: %+v", event.RoomID, err))
+		return 0, errors.New(fmt.Sprintf("Failed to create chatwoot conversation for %s: %+v", roomID, err))
 	}
 
-	err = stateStore.UpdateConversationIdForRoom(event.RoomID, conversation.ID)
+	err = stateStore.UpdateConversationIdForRoom(roomID, conversation.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -51,7 +52,7 @@ func createChatwootConversation(event *mevent.Event) (int, error) {
 	// Detect if this is the canonical DM
 	if configuration.CanonicalDMPrefix != "" {
 		var roomNameEvent mevent.RoomNameEventContent
-		err = client.StateEvent(event.RoomID, mevent.StateRoomName, "", &roomNameEvent)
+		err = client.StateEvent(roomID, mevent.StateRoomName, "", &roomNameEvent)
 		if err == nil {
 			if strings.HasPrefix(roomNameEvent.Name, configuration.CanonicalDMPrefix) {
 				err = chatwootApi.AddConversationLabel(conversation.ID, []string{"canonical-dm"})
@@ -73,18 +74,25 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 
 	conversationID, err := stateStore.GetChatwootConversationFromMatrixRoom(event.RoomID)
 	if err != nil {
-		if configuration.Username == event.Sender.String() {
-			log.Warnf("Not creating Chatwoot conversation for %s in %s", event.Sender, event.RoomID)
-			return
-		}
-
 		if configuration.BridgeIfMembersLessThan >= 0 && len(stateStore.GetRoomMembers(event.RoomID)) >= configuration.BridgeIfMembersLessThan {
 			log.Warnf("Not creating Chatwoot conversation for %s because there are not less than %d members.", event.RoomID, configuration.BridgeIfMembersLessThan)
 			return
 		}
 
+		contactMxid := event.Sender
+		if configuration.Username == event.Sender.String() {
+			// This message came from the bot. Look for the other
+			// users in the room, and use them instead.
+			nonBotMembers := stateStore.GetNonBotRoomMembers(event.RoomID)
+			if len(nonBotMembers) != 1 {
+				log.Warnf("Not creating Chatwoot conversation for %s", event.RoomID)
+				return
+			}
+			contactMxid = nonBotMembers[0]
+		}
+
 		log.Errorf("Chatwoot conversation not found for %s: %s", event.RoomID, err)
-		conversationID, err = createChatwootConversation(event)
+		conversationID, err = createChatwootConversation(event.RoomID, contactMxid)
 		if err != nil {
 			log.Errorf("Error creating chatwoot conversation: %+v", err)
 			return
