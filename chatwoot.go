@@ -77,6 +77,7 @@ func main() {
 		ChatwootBaseUrl:                          "https://app.chatwoot.com/",
 		ListenPort:                               8080,
 		BridgeIfMembersLessThan:                  -1,
+		RenderMarkdown:                           false,
 	}
 
 	err = json.Unmarshal(configJson, &configuration)

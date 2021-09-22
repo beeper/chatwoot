@@ -9,9 +9,9 @@ import (
 
 type Configuration struct {
 	// Authentication settings
-	Homeserver              string
-	Username                string
-	PasswordFile            string
+	Homeserver   string
+	Username     string
+	PasswordFile string
 
 	// Chatwoot Authentication
 	ChatwootBaseUrl         string
@@ -26,6 +26,7 @@ type Configuration struct {
 	AllowMessagesFromUsersOnOtherHomeservers bool
 	CanonicalDMPrefix                        string
 	BridgeIfMembersLessThan                  int
+	RenderMarkdown                           bool
 
 	// Webhook listener settings
 	ListenPort int

@@ -74,6 +74,8 @@ with a \*.
   `canonical-dm` label. Defaults to `""`.
 * `BridgeIfMembersLessThan` --- if not `-1`, only bridge conversations where the
   member count in the room is less than this. Defaults to `-1`.
+* `RenderMarkdown` --- `true` or `false` indicating whether or not to convert
+  the Chatwoot markdown to Matrix HTML.
 
 **Webhook Listener Settings**
 
