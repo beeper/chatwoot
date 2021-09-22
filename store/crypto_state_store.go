@@ -5,6 +5,7 @@
 package store
 
 import (
+	"database/sql"
 	"encoding/json"
 
 	log "github.com/sirupsen/logrus"
@@ -22,7 +23,9 @@ func (store *StateStore) GetEncryptionEvent(roomID mid.RoomID) *mevent.Encryptio
 
 	var encryptionEventJson []byte
 	if err := row.Scan(&encryptionEventJson); err != nil {
-		log.Errorf("Failed to find encryption event JSON for %s: %s. Error: %s", roomID, encryptionEventJson, err)
+		if err != sql.ErrNoRows {
+			log.Errorf("Couldn't to find encryption event JSON for %s: %s. Error: %s", roomID, encryptionEventJson, err)
+		}
 		return nil
 	}
 	var encryptionEvent mevent.EncryptionEventContent
