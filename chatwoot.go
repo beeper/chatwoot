@@ -294,11 +294,13 @@ func AllowKeyShare(device *mcrypto.DeviceIdentity, info mevent.RequestedKeyInfo)
 
 	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(info.RoomID)
 	if err != nil {
+		log.Infof("No Chatwoot conversation found for %s", info.RoomID)
 		return &mcrypto.KeyShareRejectNoResponse
 	}
 
 	conversation, err := chatwootApi.GetChatwootConversation(conversationID)
 	if err != nil {
+		log.Infof("Couldn't get Chatwoot conversation %d", conversationID)
 		return &mcrypto.KeyShareRejectNoResponse
 	}
 
@@ -306,8 +308,10 @@ func AllowKeyShare(device *mcrypto.DeviceIdentity, info mevent.RequestedKeyInfo)
 	if conversation.Meta.Sender.Identifier == device.UserID.String() {
 		log.Infof("Chatwoot conversation contact identifier matched device that was requesting the key. Allowing.")
 		return nil
+	} else {
+		log.Infof("%s is not allowed to get %s", conversation.Meta.Sender.Identifier, info.SessionID)
+		return &mcrypto.KeyShareRejectNoResponse
 	}
-	return &mcrypto.KeyShareRejectNoResponse
 }
 
 func FindDeviceID(db *sql.DB, accountID string) (deviceID mid.DeviceID) {
