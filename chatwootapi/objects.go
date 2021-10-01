@@ -56,11 +56,16 @@ type Message struct {
 
 // Conversation
 
+type ConversationMeta struct {
+	Sender Contact `json:"sender"`
+}
+
 type Conversation struct {
-	ID        int       `json:"id"`
-	AccountID int       `json:"account_id"`
-	InboxID   int       `json:"inbox_id"`
-	Messages  []Message `json:"messages"`
+	ID        int              `json:"id"`
+	AccountID int              `json:"account_id"`
+	InboxID   int              `json:"inbox_id"`
+	Messages  []Message        `json:"messages"`
+	Meta      ConversationMeta `json:"meta"`
 }
 
 type ConversationsPayload struct {

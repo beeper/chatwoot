@@ -23,7 +23,7 @@ func createChatwootConversation(roomID mid.RoomID, contactMxid mid.UserID) (int,
 	defer log.Debug("Released create room lock")
 	defer createRoomLock.Unlock()
 
-	if conversationID, err := stateStore.GetChatwootConversationFromMatrixRoom(roomID); err == nil {
+	if conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(roomID); err == nil {
 		return conversationID, nil
 	}
 
@@ -72,7 +72,7 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 		return
 	}
 
-	conversationID, err := stateStore.GetChatwootConversationFromMatrixRoom(event.RoomID)
+	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(event.RoomID)
 	if err != nil {
 		if configuration.BridgeIfMembersLessThan >= 0 && len(stateStore.GetRoomMembers(event.RoomID)) >= configuration.BridgeIfMembersLessThan {
 			log.Warnf("Not creating Chatwoot conversation for %s because there are not less than %d members.", event.RoomID, configuration.BridgeIfMembersLessThan)
@@ -132,7 +132,7 @@ func HandleReaction(_ mautrix.EventSource, event *mevent.Event) {
 		return
 	}
 
-	conversationID, err := stateStore.GetChatwootConversationFromMatrixRoom(event.RoomID)
+	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(event.RoomID)
 	if err != nil {
 		log.Errorf("Chatwoot conversation not found for %s: %+v", event.RoomID, err)
 		return
@@ -258,7 +258,7 @@ func HandleMatrixMessageContent(event *mevent.Event, conversationID int, content
 }
 
 func HandleRedaction(_ mautrix.EventSource, event *mevent.Event) {
-	conversationID, err := stateStore.GetChatwootConversationFromMatrixRoom(event.RoomID)
+	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(event.RoomID)
 	if err != nil {
 		log.Warn("No Chatwoot conversation associated with ", event.RoomID)
 		return

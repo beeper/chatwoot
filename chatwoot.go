@@ -197,6 +197,7 @@ func main() {
 	}
 
 	olmMachine = mcrypto.NewOlmMachine(client, &CryptoLogger{}, sqlCryptoStore, stateStore)
+	olmMachine.AllowKeyShare = AllowKeyShare
 	err = olmMachine.Load()
 	if err != nil {
 		log.Errorf("Could not initialize encryption support. Encrypted rooms will not work.")
@@ -282,6 +283,31 @@ func main() {
 	http.HandleFunc("/webhook", HandleWebhook)
 	log.Infof("Webhook listening on port %d", configuration.ListenPort)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", configuration.ListenPort), nil))
+}
+
+func AllowKeyShare(device *mcrypto.DeviceIdentity, info mevent.RequestedKeyInfo) *mcrypto.KeyShareRejection {
+	// Always allow key requests from @help
+	if device.UserID.String() == configuration.Username {
+		log.Infof("Allowing key share with %s because it's another login of the help account.", device.UserID)
+		return nil
+	}
+
+	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(info.RoomID)
+	if err != nil {
+		return &mcrypto.KeyShareRejectNoResponse
+	}
+
+	conversation, err := chatwootApi.GetChatwootConversation(conversationID)
+	if err != nil {
+		return &mcrypto.KeyShareRejectNoResponse
+	}
+
+	// This is the user that we expected for this Chatwoot conversation.
+	if conversation.Meta.Sender.Identifier == device.UserID.String() {
+		log.Infof("Chatwoot conversation contact identifier matched device that was requesting the key. Allowing.")
+		return nil
+	}
+	return &mcrypto.KeyShareRejectNoResponse
 }
 
 func FindDeviceID(db *sql.DB, accountID string) (deviceID mid.DeviceID) {
