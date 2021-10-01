@@ -150,6 +150,31 @@ func (api *ChatwootAPI) ContactIDForMxid(userID mid.UserID) (int, error) {
 	return 0, errors.New(fmt.Sprintf("Couldn't find user with user ID %s!", userID))
 }
 
+func (api *ChatwootAPI) GetChatwootConversation(conversationID int) (*Conversation, error) {
+	req, err := http.NewRequest(http.MethodGet, api.MakeUri(fmt.Sprintf("conversations/%d", conversationID)), nil)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
+	resp, err := api.DoRequest(req)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	if resp.StatusCode != 200 {
+		return nil, errors.New(fmt.Sprintf("GET conversations/%d returned non-200 status code: %d", conversationID, resp.StatusCode))
+	}
+
+	decoder := json.NewDecoder(resp.Body)
+	var conversation Conversation
+	err = decoder.Decode(&conversation)
+	if err != nil {
+		return nil, err
+	}
+	return &conversation, nil
+}
+
 func (api *ChatwootAPI) CreateConversation(sourceID string, contactID int) (*Conversation, error) {
 	values := map[string]interface{}{
 		"source_id":  sourceID,

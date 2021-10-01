@@ -7,7 +7,7 @@ import (
 	mid "maunium.net/go/mautrix/id"
 )
 
-func (store *StateStore) GetChatwootConversationFromMatrixRoom(roomID mid.RoomID) (int, error) {
+func (store *StateStore) GetChatwootConversationIDFromMatrixRoom(roomID mid.RoomID) (int, error) {
 	row := store.DB.QueryRow(`
 		SELECT chatwoot_conversation_id
 		  FROM chatwoot_conversation_to_matrix_room
