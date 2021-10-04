@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 	"maunium.net/go/mautrix"
@@ -185,15 +186,28 @@ func HandleMessageCreated(mc chatwootapi.MessageCreated) error {
 		return err
 	}
 
+	// Acquire the lock, so that we don't have race conditions with the
+	// matrix handler.
+	if _, found := roomSendlocks[roomID]; !found {
+		log.Debugf("Creating send lock for %s", roomID)
+		roomSendlocks[roomID] = &sync.Mutex{}
+	}
+	roomSendlocks[roomID].Lock()
+	log.Debugf("[chatwoot-handler] Acquired send lock for %s", roomID)
+	defer log.Debugf("[chatwoot-handler] Released send lock for %s", roomID)
+	defer roomSendlocks[roomID].Unlock()
+
+	eventIDs := stateStore.GetMatrixEventIdsForChatwootMessage(mc.ID)
+
 	// Handle deletions first.
 	if mc.ContentAttributes != nil && mc.ContentAttributes.Deleted {
-		log.Infof("Message %d deleted", mc.ID)
+		log.Infof("[chatwoot-handler] message %d deleted", mc.ID)
 		var errs []error
-		for _, eventID := range stateStore.GetMatrixEventIdsForChatwootMessage(mc.ID) {
+		for _, eventID := range eventIDs {
 			event, err := client.GetEvent(roomID, eventID)
 			if err == nil && event.Unsigned.RedactedBecause != nil {
 				// Already redacted
-				log.Infof("Message %d was already redacted", mc.ID)
+				log.Infof("[chatwoot-handler] message %d was already redacted", mc.ID)
 				continue
 			}
 			_, err = client.RedactEvent(roomID, eventID)
@@ -207,18 +221,9 @@ func HandleMessageCreated(mc chatwootapi.MessageCreated) error {
 		return nil
 	}
 
-	// Ensure that if the webhook event comes through before the message ID
-	// is persisted to the database it will be properly deduplicated.
-	for _, userID := range stateStore.GetNonBotRoomMembers(roomID) {
-		_, found := userSendlocks[userID]
-		if found {
-			userSendlocks[userID].Lock()
-			log.Debugf("[chatwoot-handler] Acquired send lock for %s", userID)
-			defer log.Debugf("[chatwoot-handler] Released send lock for %s", userID)
-			defer userSendlocks[userID].Unlock()
-		}
-	}
-	if eventIDs := stateStore.GetMatrixEventIdsForChatwootMessage(mc.ID); len(eventIDs) > 0 {
+	// If there are already Matrix event IDs for this Chatwoot message,
+	// don't try and actually process the chatwoot message.
+	if len(eventIDs) > 0 {
 		log.Infof("Chatwoot message with ID %d already has a Matrix Event ID(s): %v", mc.ID, eventIDs)
 		return nil
 	}
@@ -236,13 +241,10 @@ func HandleMessageCreated(mc chatwootapi.MessageCreated) error {
 		} else {
 			messageEventContent = mevent.MessageEventContent{MsgType: event.MsgText, Body: messageText}
 		}
-		rawResp, err := DoRetry(fmt.Sprintf("send message to %s", roomID), func() (interface{}, error) {
-			return SendMessage(roomID, messageEventContent)
-		})
+		resp, err = SendMessage(roomID, messageEventContent)
 		if err != nil {
 			return err
 		}
-		resp = rawResp.(*mautrix.RespSendEvent)
 		stateStore.SetChatwootMessageIdForMatrixEvent(resp.EventID, mc.ID)
 	}
 
@@ -297,18 +299,15 @@ func HandleMessageCreated(mc chatwootapi.MessageCreated) error {
 			}
 		}
 
-		rawResp, err := DoRetry(fmt.Sprintf("send attachment to %s", roomID), func() (interface{}, error) {
-			return SendMessage(roomID, mevent.MessageEventContent{
-				Body:    filename,
-				MsgType: messageType,
-				Info:    &fileInfo,
-				File:    file,
-			})
+		resp, err = SendMessage(roomID, mevent.MessageEventContent{
+			Body:    filename,
+			MsgType: messageType,
+			Info:    &fileInfo,
+			File:    file,
 		})
 		if err != nil {
 			return err
 		}
-		resp = rawResp.(*mautrix.RespSendEvent)
 		stateStore.SetChatwootMessageIdForMatrixEvent(resp.EventID, mc.ID)
 	}
 

@@ -67,6 +67,17 @@ func createChatwootConversation(roomID mid.RoomID, contactMxid mid.UserID) (int,
 }
 
 func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
+	// Acquire the lock, so that we don't have race conditions with the
+	// Chatwoot handler.
+	if _, found := roomSendlocks[event.RoomID]; !found {
+		log.Debugf("[message handler] creating send lock for %s", event.RoomID)
+		roomSendlocks[event.RoomID] = &sync.Mutex{}
+	}
+	roomSendlocks[event.RoomID].Lock()
+	log.Debugf("[message handler] Acquired send lock for %s", event.RoomID)
+	defer log.Debugf("[message handler] Released send lock for %s", event.RoomID)
+	defer roomSendlocks[event.RoomID].Unlock()
+
 	if messageID, err := stateStore.GetChatwootMessageIdForMatrixEventId(event.ID); err == nil {
 		log.Info("Matrix Event ID ", event.ID, " already has a Chatwoot message with ID ", messageID)
 		return
@@ -99,18 +110,6 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 		}
 	}
 
-	// Ensure that if the webhook event comes through before the message ID
-	// is persisted to the database it will be properly deduplicated.
-	_, found := userSendlocks[event.Sender]
-	if !found {
-		log.Debugf("Creating send lock for %s", event.Sender)
-		userSendlocks[event.Sender] = &sync.Mutex{}
-	}
-	userSendlocks[event.Sender].Lock()
-	log.Debugf("[message handler] Acquired send lock for %s", event.Sender)
-	defer log.Debugf("[message handler] Released send lock for %s", event.Sender)
-	defer userSendlocks[event.Sender].Unlock()
-
 	content := event.Content.AsMessage()
 	cm, err := DoRetry(fmt.Sprintf("handle matrix event %s in conversation %d", event.ID, conversationID), func() (interface{}, error) {
 		return HandleMatrixMessageContent(event, conversationID, content)
@@ -127,6 +126,17 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 }
 
 func HandleReaction(_ mautrix.EventSource, event *mevent.Event) {
+	// Acquire the lock, so that we don't have race conditions with the
+	// Chatwoot handler.
+	if _, found := roomSendlocks[event.RoomID]; !found {
+		log.Debugf("[reaction handler] creating send lock for %s", event.RoomID)
+		roomSendlocks[event.RoomID] = &sync.Mutex{}
+	}
+	roomSendlocks[event.RoomID].Lock()
+	log.Debugf("[reaction handler] Acquired send lock for %s", event.RoomID)
+	defer log.Debugf("[reaction handler] Released send lock for %s", event.RoomID)
+	defer roomSendlocks[event.RoomID].Unlock()
+
 	if messageID, err := stateStore.GetChatwootMessageIdForMatrixEventId(event.ID); err == nil {
 		log.Info("Matrix Event ID ", event.ID, " already has a Chatwoot message with ID ", messageID)
 		return
@@ -137,18 +147,6 @@ func HandleReaction(_ mautrix.EventSource, event *mevent.Event) {
 		log.Errorf("Chatwoot conversation not found for %s: %+v", event.RoomID, err)
 		return
 	}
-
-	// Ensure that if the webhook event comes through before the message ID
-	// is persisted to the database it will be properly deduplicated.
-	_, found := userSendlocks[event.Sender]
-	if !found {
-		log.Debugf("Creating send lock for %s", event.Sender)
-		userSendlocks[event.Sender] = &sync.Mutex{}
-	}
-	userSendlocks[event.Sender].Lock()
-	log.Debugf("[reaction handler] Acquired send lock for %s", event.Sender)
-	defer log.Debugf("[reaction handler] Released send lock for %s", event.Sender)
-	defer userSendlocks[event.Sender].Unlock()
 
 	cm, err := DoRetry(fmt.Sprintf("send notification of reaction to %d", conversationID), func() (interface{}, error) {
 		reaction := event.Content.AsReaction()
@@ -258,29 +256,31 @@ func HandleMatrixMessageContent(event *mevent.Event, conversationID int, content
 }
 
 func HandleRedaction(_ mautrix.EventSource, event *mevent.Event) {
-	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(event.RoomID)
-	if err != nil {
-		log.Warn("No Chatwoot conversation associated with ", event.RoomID)
-		return
+	// Acquire the lock, so that we don't have race conditions with the
+	// Chatwoot handler.
+	if _, found := roomSendlocks[event.RoomID]; !found {
+		log.Debugf("[redaction handler] creating send lock for %s", event.RoomID)
+		roomSendlocks[event.RoomID] = &sync.Mutex{}
 	}
-
-	// Ensure that no sends are in progress before we try and redact
-	// anything.
-	_, found := userSendlocks[event.Sender]
-	if !found {
-		log.Debugf("Creating send lock for %s", event.Sender)
-		userSendlocks[event.Sender] = &sync.Mutex{}
-	}
-	userSendlocks[event.Sender].Lock()
-	log.Debugf("[redaction handler] Acquired send lock for %s", event.Sender)
-	defer log.Debugf("[redaction handler] Released send lock for %s", event.Sender)
-	defer userSendlocks[event.Sender].Unlock()
+	roomSendlocks[event.RoomID].Lock()
+	log.Debugf("[redaction handler] Acquired send lock for %s", event.RoomID)
+	defer log.Debugf("[redaction handler] Released send lock for %s", event.RoomID)
+	defer roomSendlocks[event.RoomID].Unlock()
 
 	messageID, err := stateStore.GetChatwootMessageIdForMatrixEventId(event.Redacts)
 	if err != nil {
-		log.Info("No Chatwoot message for Matrix event ", event.Redacts)
+		log.Info("[redaction handler] No Chatwoot message for Matrix event ", event.Redacts)
 		return
 	}
 
-	chatwootApi.DeleteMessage(conversationID, messageID)
+	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(event.RoomID)
+	if err != nil {
+		log.Warn("[redaction handler] No Chatwoot conversation associated with ", event.RoomID)
+		return
+	}
+
+	err = chatwootApi.DeleteMessage(conversationID, messageID)
+	if err != nil {
+		log.Infof("[redaction handler] Failed to delete Chatwoot message: %+v", err)
+	}
 }
