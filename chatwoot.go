@@ -32,7 +32,7 @@ var stateStore *store.StateStore
 var chatwootApi *chatwootapi.ChatwootAPI
 var botHomeserver string
 
-var userSendlocks map[mid.UserID]*sync.Mutex
+var roomSendlocks map[mid.RoomID]*sync.Mutex
 
 var VERSION = "0.2.1"
 
@@ -129,7 +129,7 @@ func main() {
 	}()
 
 	// Initialize the send lock map
-	userSendlocks = map[mid.UserID]*sync.Mutex{}
+	roomSendlocks = map[mid.RoomID]*sync.Mutex{}
 
 	stateStore = store.NewStateStore(db, dbDialect, username)
 	if err := stateStore.CreateTables(); err != nil {
