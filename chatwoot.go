@@ -254,7 +254,20 @@ func main() {
 
 		decryptedEvent, err := olmMachine.DecryptMegolmEvent(event)
 		if err != nil {
-			log.Errorf("Failed to decrypt message from %s in %s: %+v", event.Sender, event.RoomID, err)
+			decryptErr := err
+			log.Errorf("Failed to decrypt message from %s in %s: %+v", event.Sender, event.RoomID, decryptErr)
+			conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(event.RoomID)
+
+			if err != nil {
+				log.Warn("[encrypted event handler] No Chatwoot conversation associated with ", event.RoomID)
+				return
+			}
+
+			DoRetry(fmt.Sprintf("send private error message to %d for %+v", conversationID, decryptErr), func() (interface{}, error) {
+				return chatwootApi.SendPrivateMessage(
+					conversationID,
+					fmt.Sprintf("**Failed to decrypt Matrix event. You probably missed a message!**\n\nError: %+v", decryptErr))
+			})
 		} else {
 			log.Debugf("Received encrypted event from %s in %s", event.Sender, event.RoomID)
 			if decryptedEvent.Type == mevent.EventMessage {
