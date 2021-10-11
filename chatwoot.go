@@ -136,7 +136,7 @@ func main() {
 		log.Fatal("Failed to create the tables for chatwoot.", err)
 	}
 
-	log.Info("Using username/password auth")
+	log.Info("Logging in")
 	password, err := configuration.GetPassword()
 	if err != nil {
 		log.Fatalf("Could not read password from %s", configuration.PasswordFile)
