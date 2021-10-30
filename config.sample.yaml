@@ -1,0 +1,40 @@
+# ===== Matrix Authentication =====
+# The Matrix homeserver to connect to
+homeserver: https://matrix.example.com
+# The Matrix username of the help bot
+username: "@help:example.com"
+# A file containing the Matrix user password
+password_file: /path/to/password/file
+
+# ===== Chatwoot Authentication =====
+# The base URL for the Chatwoot instance
+chatwoot_base_url: https://app.chatwoot.com/
+# A file containing the access token for Chatwoot
+chatwoot_access_token_file: /path/to/chatwoot/access/file
+# The Chatwoot account ID to use
+chatwoot_account_id: 123
+# The Chatwoot inbox ID to create conversations in
+chatwoot_inbox_id: 123
+
+# ===== Database Settings =====
+# A PostgreSQL database connection string for the bot
+db_connection_string: postgresql://user:password@somewhere/chatwoot
+
+# ===== Bot Settings =====
+# Boolean indicating whether or not to create conversations for messages
+# originating from users on other homeservers. Defaults to false.
+allow_messages_from_users_on_other_homeservers: false
+# If not "", when creating a conversation, if the Matrix room name starts
+# with this prefix, it will be labeled with the "canonical-dm" label. Defaults
+# to "".
+canonical_dm_prefix:
+# If not -1, only bridge conversations where the member count in the room is
+# less than this. Defaults to -1.
+bridge_if_members_less_than: -1
+# Boolean indicating whether or not to convert the Chatwoot markdown to Matrix
+# HTML.
+render_markdown: false
+
+# ===== Webhook Listener Settings =====
+# The port to listen for webhook events on. Defaults to 8080
+listen_port: 8080

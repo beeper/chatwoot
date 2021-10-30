@@ -9,27 +9,27 @@ import (
 
 type Configuration struct {
 	// Authentication settings
-	Homeserver   string
-	Username     string
-	PasswordFile string
+	Homeserver   string `yaml:"homeserver"`
+	Username     string `yaml:"username"`
+	PasswordFile string `yaml:"password_file"`
 
 	// Chatwoot Authentication
-	ChatwootBaseUrl         string
-	ChatwootAccessTokenFile string
-	ChatwootAccountID       int
-	ChatwootInboxID         int
+	ChatwootBaseUrl         string `yaml:"chatwoot_base_url"`
+	ChatwootAccessTokenFile string `yaml:"chatwoot_access_token_file"`
+	ChatwootAccountID       int    `yaml:"chatwoot_account_id"`
+	ChatwootInboxID         int    `yaml:"chatwoot_inbox_id"`
 
 	// Database settings
-	DBConnectionString string
+	DBConnectionString string `yaml:"db_connection_string"`
 
 	// Bot settings
-	AllowMessagesFromUsersOnOtherHomeservers bool
-	CanonicalDMPrefix                        string
-	BridgeIfMembersLessThan                  int
-	RenderMarkdown                           bool
+	AllowMessagesFromUsersOnOtherHomeservers bool   `yaml:"allow_messages_from_users_on_other_homeservers"`
+	CanonicalDMPrefix                        string `yaml:"canonical_dm_prefix"`
+	BridgeIfMembersLessThan                  int    `yaml:"bridge_if_members_less_than"`
+	RenderMarkdown                           bool   `yaml:"render_markdown"`
 
 	// Webhook listener settings
-	ListenPort int
+	ListenPort int `yaml:"listen_port"`
 }
 
 func (c *Configuration) GetPassword() (string, error) {

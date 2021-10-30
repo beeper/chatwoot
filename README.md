@@ -42,42 +42,4 @@ support the feature
 
 ## Configuration
 
-First, create an inbox in your Chatwoot instance, and set the webhook URL to the
-bridge (see Webhook Listener Settings below). Then, create a `config.json` file.
-The options are listed below. Required fields are marked with a \*.
-
-**Matrix Authentication**
-
-* `Homeserver` \* --- the Matrix homeserver to connect to
-* `Username` \* --- the Matrix username of the help bot
-* `PasswordFile` \* --- a file containing the Matrix user password
-
-**Chatwoot Authentication**
-
-* `ChatwootBaseUrl` \* --- the base URL for the Chatwoot instance
-* `ChatwootAccessTokenFile` \* --- a file containing the access token for
-  Chatwoot
-* `ChatwootAccountID` \* --- the Chatwoot account ID to use
-* `ChatwootInboxID` \* --- the Chatwoot inbox ID to create conversations in
-
-**Database Settings**
-
-* `DBConnectionString` \* --- a PostgreSQL database connection string for the
-  bot
-
-**Bot Settings**
-
-* `AllowMessagesFromUsersOnOtherHomeservers` --- `true` or `false` indicating
-  whether or not to create conversations for messages originating from users on
-  other homeservers. Defaults to `false`.
-* `CanonicalDMPrefix` --- if not `""`, when creating a conversation, if the
-  Matrix room name starts with this prefix, it will be labeled with the
-  `canonical-dm` label. Defaults to `""`.
-* `BridgeIfMembersLessThan` --- if not `-1`, only bridge conversations where the
-  member count in the room is less than this. Defaults to `-1`.
-* `RenderMarkdown` --- `true` or `false` indicating whether or not to convert
-  the Chatwoot markdown to Matrix HTML.
-
-**Webhook Listener Settings**
-
-* `ListenPort` \* --- the port to listen for webhook events on
+See `config.sample.yaml` for details about each config option.

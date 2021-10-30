@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -15,6 +14,7 @@ import (
 
 	_ "github.com/jackc/pgx/v4/stdlib"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 	"maunium.net/go/mautrix"
 	mcrypto "maunium.net/go/mautrix/crypto"
 	mevent "maunium.net/go/mautrix/event"
@@ -39,7 +39,7 @@ var VERSION = "0.2.1"
 
 func main() {
 	// Arg parsing
-	configPath := flag.String("config", "./config.json", "config file location")
+	configPath := flag.String("config", "./config.yaml", "config file location")
 	logLevelStr := flag.String("loglevel", "debug", "the log level")
 	logFilename := flag.String("logfile", "", "the log file to use (defaults to '' meaning no log file)")
 	flag.Parse()
@@ -67,7 +67,7 @@ func main() {
 
 	// Load configuration
 	log.Infof("Reading config from %s...", *configPath)
-	configJson, err := os.ReadFile(*configPath)
+	configYaml, err := os.ReadFile(*configPath)
 	if err != nil {
 		log.Fatalf("Could not read config from %s: %s", *configPath, err)
 	}
@@ -81,10 +81,11 @@ func main() {
 		RenderMarkdown:                           false,
 	}
 
-	err = json.Unmarshal(configJson, &configuration)
+	err = yaml.Unmarshal(configYaml, &configuration)
 	if err != nil {
-		log.Fatalf("Failed to parse parse configuration JSON: %v", err)
+		log.Fatalf("Could not parse config: %s", err)
 	}
+	log.Infof("Config loaded %v.", configuration)
 	username := mid.UserID(configuration.Username)
 	_, botHomeserver, err = username.Parse()
 	if err != nil {

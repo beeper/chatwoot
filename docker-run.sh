@@ -9,10 +9,10 @@ function fixperms {
 	chown -R $UID:$GID /data /opt/chatwoot
 }
 
-if [[ ! -f /data/config.json ]]; then
-	cp /opt/chatwoot/config.sample.json /data/config.json
+if [[ ! -f /data/config.yaml ]]; then
+	cp /opt/chatwoot/config.sample.yaml /data/config.yaml
 	echo "Didn't find a config file."
-	echo "Copied default config file to /data/config.json"
+	echo "Copied default config file to /data/config.yaml"
 	echo "Modify that config file to your liking."
 	echo "Start the container again after that to generate the registration file."
 	exit

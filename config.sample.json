@@ -1,9 +1,0 @@
-{
-    "Homeserver": "https://matrix.example.com",
-    "Username": "@help:example.com",
-    "PasswordFile": "/path/to/password/file",
-    "ChatwootAccessTokenFile": "/path/to/chatwoot/access/file",
-    "ChatwootAccountID": 123,
-    "ChatwootInboxID": 123,
-    "DBConnectionString": "postgresql://user:password@somewhere/chatwoot"
-}
