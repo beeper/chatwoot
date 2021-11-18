@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -66,6 +67,8 @@ func createChatwootConversation(roomID mid.RoomID, contactMxid mid.UserID) (int,
 	return conversation.ID, nil
 }
 
+var rageshakeIssueRegex = regexp.MustCompile(`[A-Z]{1,5}-\d+`)
+
 func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 	// Acquire the lock, so that we don't have race conditions with the
 	// Chatwoot handler.
@@ -123,6 +126,15 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 		return
 	}
 	stateStore.SetChatwootMessageIdForMatrixEvent(event.ID, cm.(*chatwootapi.Message).ID)
+	if content.MsgType == mevent.MsgText || content.MsgType == mevent.MsgNotice {
+		linearLinks := []string{}
+		for _, match := range rageshakeIssueRegex.FindAllString(content.Body, -1) {
+			linearLinks = append(linearLinks, fmt.Sprintf("https://linear.app/beeper/issue/%s", match))
+		}
+		if len(linearLinks) > 0 {
+			chatwootApi.SendPrivateMessage(conversationID, strings.Join(linearLinks, "\n\n"))
+		}
+	}
 }
 
 func HandleReaction(_ mautrix.EventSource, event *mevent.Event) {
@@ -220,8 +232,6 @@ func HandleMatrixMessageContent(event *mevent.Event, conversationID int, content
 		break
 
 	case mevent.MsgAudio, mevent.MsgFile, mevent.MsgImage, mevent.MsgVideo:
-		log.Debug(content)
-
 		var file *mevent.EncryptedFileInfo
 		rawMXC := content.URL
 		if content.File != nil {
