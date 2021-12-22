@@ -4,7 +4,7 @@ A bot which logs in as a help user in Matrix and mirrors all messages sent to it
 from Matrix into Chatwoot and allows Chatwoot agents to respond.
 
 Matrix chat:
-[#chatwoot-matrix:sumnerevans.com](https://matrix.to/#/#chatwoot-matrix:sumnerevans.com)
+[#chatwoot-matrix:nevarro.space](https://matrix.to/#/#chatwoot-matrix:nevarro.space)
 
 ## Supported features
 
