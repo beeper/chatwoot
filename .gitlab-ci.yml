@@ -1,6 +1,18 @@
 stages:
+  - lint
   - build
   - build docker
+
+lint:
+  image: python:3.10-alpine
+  stage: lint
+  before_script:
+  - pip3 install pre-commit
+  - apk add --no-cache bash git go
+  - go install golang.org/x/tools/cmd/goimports@latest
+  - export PATH="$HOME/go/bin:$PATH"
+  script:
+  - "pre-commit run -a"
 
 build:
   image: dock.mau.dev/tulir/gomuks-build-docker:linux-amd64
