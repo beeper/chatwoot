@@ -7,7 +7,7 @@ in
       go
       olm
     ] ++ lib.lists.optional (!forCI) [
-      goimports
+      gotools
       gopls
       vgo2nix
     ];
