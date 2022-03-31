@@ -42,8 +42,9 @@ support the feature
 
 ## Configuration
 
-The `config.json` file can have the following keys. Required fields are marked
-with a \*.
+First, create an inbox in your Chatwoot instance, and set the webhook URL to the
+bridge (see Webhook Listener Settings below). Then, create a `config.json` file.
+The options are listed below. Required fields are marked with a \*.
 
 **Matrix Authentication**
 
