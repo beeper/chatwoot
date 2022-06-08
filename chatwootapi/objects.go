@@ -61,11 +61,12 @@ type ConversationMeta struct {
 }
 
 type Conversation struct {
-	ID        int              `json:"id"`
-	AccountID int              `json:"account_id"`
-	InboxID   int              `json:"inbox_id"`
-	Messages  []Message        `json:"messages"`
-	Meta      ConversationMeta `json:"meta"`
+	ID               int               `json:"id"`
+	AccountID        int               `json:"account_id"`
+	InboxID          int               `json:"inbox_id"`
+	Messages         []Message         `json:"messages"`
+	Meta             ConversationMeta  `json:"meta"`
+	CustomAttributes map[string]string `json:"custom_attributes"`
 }
 
 type ConversationsPayload struct {

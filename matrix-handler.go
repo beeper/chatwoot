@@ -18,7 +18,7 @@ import (
 
 var createRoomLock sync.Mutex = sync.Mutex{}
 
-func createChatwootConversation(roomID mid.RoomID, contactMxid mid.UserID) (int, error) {
+func createChatwootConversation(roomID mid.RoomID, contactMxid mid.UserID, customAttrs map[string]string) (int, error) {
 	log.Debug("Acquired create room lock")
 	createRoomLock.Lock()
 	defer log.Debug("Released create room lock")
@@ -40,7 +40,7 @@ func createChatwootConversation(roomID mid.RoomID, contactMxid mid.UserID) (int,
 	}
 
 	log.Infof("Creating conversation for room %s for contact %d", roomID, contactID)
-	conversation, err := chatwootApi.CreateConversation(roomID.String(), contactID)
+	conversation, err := chatwootApi.CreateConversation(roomID.String(), contactID, nil)
 	if err != nil {
 		return 0, errors.New(fmt.Sprintf("Failed to create chatwoot conversation for %s: %+v", roomID, err))
 	}
@@ -65,6 +65,43 @@ func createChatwootConversation(roomID mid.RoomID, contactMxid mid.UserID) (int,
 	}
 
 	return conversation.ID, nil
+}
+
+func GetConversationCustomAttrs(event *mevent.Event) map[string]string {
+	customAttrs := map[string]string{}
+	if clientType, exists := event.Content.Raw["com.beeper.origin_client_type"]; exists && clientType != nil {
+		if ct, ok := clientType.(string); ok {
+			customAttrs["Client Type"] = ct
+		}
+	}
+	if clientVersion, exists := event.Content.Raw["com.beeper.origin_client_version"]; exists && clientVersion != nil {
+		if cv, ok := clientVersion.(string); ok {
+			customAttrs["Client Version"] = cv
+		}
+	}
+	return customAttrs
+}
+
+func HandleBeeperClientInfo(event *mevent.Event) error {
+	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(event.RoomID)
+	if err != nil {
+		return err
+	}
+
+	conv, err := chatwootApi.GetChatwootConversation(conversationID)
+	customAttrs := conv.CustomAttributes
+	changed := false
+	for k, v := range GetConversationCustomAttrs(event) {
+		if customAttrs[k] != v {
+			changed = true
+			customAttrs[k] = v
+		}
+	}
+
+	if changed {
+		return chatwootApi.SetConversationCustomAttributes(conversationID, customAttrs)
+	}
+	return nil
 }
 
 var rageshakeIssueRegex = regexp.MustCompile(`[A-Z]{1,5}-\d+`)
@@ -106,7 +143,7 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 		}
 
 		log.Errorf("Chatwoot conversation not found for %s: %s", event.RoomID, err)
-		conversationID, err = createChatwootConversation(event.RoomID, contactMxid)
+		conversationID, err = createChatwootConversation(event.RoomID, contactMxid, GetConversationCustomAttrs(event))
 		if err != nil {
 			log.Errorf("Error creating chatwoot conversation: %+v", err)
 			return
@@ -114,7 +151,8 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 	}
 
 	cm, err := DoRetry(fmt.Sprintf("handle matrix event %s in conversation %d", event.ID, conversationID), func() (interface{}, error) {
-		return HandleMatrixMessageContent(event, conversationID, &event.Content)
+		content := event.Content.AsMessage()
+		return HandleMatrixMessageContent(event, conversationID, content)
 	})
 	if err != nil {
 		DoRetry(fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func() (interface{}, error) {
@@ -205,8 +243,7 @@ func HandleReaction(_ mautrix.EventSource, event *mevent.Event) {
 	stateStore.SetChatwootMessageIdForMatrixEvent(event.ID, cm.(*chatwootapi.Message).ID)
 }
 
-func HandleMatrixMessageContent(event *mevent.Event, conversationID int, rawContent *mevent.Content) (*chatwootapi.Message, error) {
-	content := event.Content.AsMessage()
+func HandleMatrixMessageContent(event *mevent.Event, conversationID int, content *mevent.MessageEventContent) (*chatwootapi.Message, error) {
 	messageType := chatwootapi.IncomingMessage
 	if configuration.Username == event.Sender.String() {
 		messageType = chatwootapi.OutgoingMessage
@@ -214,19 +251,6 @@ func HandleMatrixMessageContent(event *mevent.Event, conversationID int, rawCont
 
 	var cm *chatwootapi.Message
 	var err error
-
-	versionInfo := []string{}
-	if clientType, exists := rawContent.Raw["com.beeper.origin_client_type"]; exists && clientType != nil {
-		versionInfo = append(versionInfo, fmt.Sprintf("Client Type: %s", clientType))
-	}
-	if clientVersion, exists := rawContent.Raw["com.beeper.origin_client_version"]; exists && clientVersion != nil {
-		versionInfo = append(versionInfo, fmt.Sprintf("Client Version: %s", clientVersion))
-	}
-
-	var versionString string
-	if len(versionInfo) > 0 {
-		versionString = "\n\n" + strings.Join(versionInfo, "\n")
-	}
 
 	switch content.MsgType {
 	case mevent.MsgText, mevent.MsgNotice:
@@ -237,13 +261,11 @@ func HandleMatrixMessageContent(event *mevent.Event, conversationID int, rawCont
 				body = " \\* " + body[3:]
 			}
 		}
-		messageText := fmt.Sprintf("%s%s", body, versionString)
-		cm, err = chatwootApi.SendTextMessage(conversationID, messageText, messageType)
+		cm, err = chatwootApi.SendTextMessage(conversationID, body, messageType)
 
 	case mevent.MsgEmote:
 		localpart, _, _ := event.Sender.Parse()
-		messageText := fmt.Sprintf(" \\* %s %s%s", localpart, content.Body, versionString)
-		cm, err = chatwootApi.SendTextMessage(conversationID, messageText, messageType)
+		cm, err = chatwootApi.SendTextMessage(conversationID, fmt.Sprintf(" \\* %s %s", localpart, content.Body), messageType)
 
 	case mevent.MsgAudio, mevent.MsgFile, mevent.MsgImage, mevent.MsgVideo:
 		var file *mevent.EncryptedFileInfo
@@ -269,8 +291,7 @@ func HandleMatrixMessageContent(event *mevent.Event, conversationID int, rawCont
 			}
 		}
 
-		messageText := fmt.Sprintf("%s%s", content.Body, versionString)
-		cm, err = chatwootApi.SendAttachmentMessage(conversationID, messageText, content.Info.MimeType, bytes.NewReader(data), messageType)
+		cm, err = chatwootApi.SendAttachmentMessage(conversationID, content.Body, content.Info.MimeType, bytes.NewReader(data), messageType)
 		if err != nil {
 			return nil, errors.New(fmt.Sprintf("Failed to send attachment message. Error: %+v", err))
 		}

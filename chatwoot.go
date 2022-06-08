@@ -231,18 +231,21 @@ func main() {
 	syncer.OnEventType(mevent.EventMessage, func(source mautrix.EventSource, event *mevent.Event) {
 		stateStore.UpdateMostRecentEventIdForRoom(event.RoomID, event.ID)
 		if VerifyFromAuthorizedUser(event.Sender) {
+			go HandleBeeperClientInfo(event)
 			go HandleMessage(source, event)
 		}
 	})
 	syncer.OnEventType(mevent.EventReaction, func(source mautrix.EventSource, event *mevent.Event) {
 		stateStore.UpdateMostRecentEventIdForRoom(event.RoomID, event.ID)
 		if VerifyFromAuthorizedUser(event.Sender) {
+			go HandleBeeperClientInfo(event)
 			go HandleReaction(source, event)
 		}
 	})
 	syncer.OnEventType(mevent.EventRedaction, func(source mautrix.EventSource, event *mevent.Event) {
 		stateStore.UpdateMostRecentEventIdForRoom(event.RoomID, event.ID)
 		if VerifyFromAuthorizedUser(event.Sender) {
+			go HandleBeeperClientInfo(event)
 			go HandleRedaction(source, event)
 		}
 	})
@@ -270,6 +273,7 @@ func main() {
 			})
 		} else {
 			log.Debugf("Received encrypted event from %s in %s", event.Sender, event.RoomID)
+			go HandleBeeperClientInfo(event)
 			if decryptedEvent.Type == mevent.EventMessage {
 				go HandleMessage(source, decryptedEvent)
 			} else if decryptedEvent.Type == mevent.EventReaction {
