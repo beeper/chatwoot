@@ -175,12 +175,13 @@ func (api *ChatwootAPI) GetChatwootConversation(conversationID int) (*Conversati
 	return &conversation, nil
 }
 
-func (api *ChatwootAPI) CreateConversation(sourceID string, contactID int) (*Conversation, error) {
+func (api *ChatwootAPI) CreateConversation(sourceID string, contactID int, additionalAttrs map[string]string) (*Conversation, error) {
 	values := map[string]interface{}{
-		"source_id":  sourceID,
-		"inbox_id":   api.InboxID,
-		"contact_id": contactID,
-		"status":     "open",
+		"source_id":             sourceID,
+		"inbox_id":              api.InboxID,
+		"contact_id":            contactID,
+		"status":                "open",
+		"additional_attributes": additionalAttrs,
 	}
 	jsonValue, _ := json.Marshal(values)
 	req, err := http.NewRequest(http.MethodPost, api.MakeUri("conversations"), bytes.NewBuffer(jsonValue))
@@ -231,6 +232,27 @@ func (api *ChatwootAPI) AddConversationLabel(conversationID int, labels []string
 			content = []byte{}
 		}
 		return errors.New(fmt.Sprintf("POST conversations returned non-200 status code: %d: %s", resp.StatusCode, string(content)))
+	}
+	return nil
+}
+
+func (api *ChatwootAPI) SetConversationCustomAttributes(conversationID int, customAttrs map[string]string) error {
+	jsonValue, _ := json.Marshal(map[string]interface{}{
+		"custom_attributes": customAttrs,
+	})
+	req, err := http.NewRequest(http.MethodPost, api.MakeUri(fmt.Sprintf("conversations/%d/custom_attributes", conversationID)), bytes.NewBuffer(jsonValue))
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+
+	resp, err := api.DoRequest(req)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	if resp.StatusCode != 200 {
+		return errors.New(fmt.Sprintf("POST conversations/%d/custom_attributes returned non-200 status code: %d", conversationID, resp.StatusCode))
 	}
 	return nil
 }

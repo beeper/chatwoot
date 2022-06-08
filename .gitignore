@@ -1,6 +1,7 @@
 bin
 config*.json
 !config.sample.json
+chatwoot
 chatwoot.db
 chatwoot.log
 .direnv
