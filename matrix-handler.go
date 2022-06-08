@@ -40,7 +40,7 @@ func createChatwootConversation(roomID mid.RoomID, contactMxid mid.UserID, custo
 	}
 
 	log.Infof("Creating conversation for room %s for contact %d", roomID, contactID)
-	conversation, err := chatwootApi.CreateConversation(roomID.String(), contactID, nil)
+	conversation, err := chatwootApi.CreateConversation(roomID.String(), contactID, customAttrs)
 	if err != nil {
 		return 0, errors.New(fmt.Sprintf("Failed to create chatwoot conversation for %s: %+v", roomID, err))
 	}
@@ -67,19 +67,32 @@ func createChatwootConversation(roomID mid.RoomID, contactMxid mid.UserID, custo
 	return conversation.ID, nil
 }
 
-func GetConversationCustomAttrs(event *mevent.Event) map[string]string {
-	customAttrs := map[string]string{}
-	if clientType, exists := event.Content.Raw["com.beeper.origin_client_type"]; exists && clientType != nil {
-		if ct, ok := clientType.(string); ok {
-			customAttrs["Client Type"] = ct
-		}
+func GetCustomAttrForDevice(event *mevent.Event) (string, string) {
+	clientType, exists := event.Content.Raw["com.beeper.origin_client_type"]
+	if !exists || clientType == nil {
+		return "", ""
 	}
-	if clientVersion, exists := event.Content.Raw["com.beeper.origin_client_version"]; exists && clientVersion != nil {
-		if cv, ok := clientVersion.(string); ok {
-			customAttrs["Client Version"] = cv
-		}
+
+	var clientTypeString, clientVersionString string
+	if ct, ok := clientType.(string); ok {
+		clientTypeString = fmt.Sprintf("%s version", ct)
+	} else {
+		return "", ""
 	}
-	return customAttrs
+
+	clientVersion, exists := event.Content.Raw["com.beeper.origin_client_version"]
+	if !exists && clientVersion == nil {
+		return "", ""
+	}
+
+	if cv, ok := clientVersion.(string); ok {
+		clientVersionString = cv
+	} else {
+		return "", ""
+	}
+
+	log.Debugf("Got client type '%s' and client version '%s'", clientTypeString, clientVersionString)
+	return clientTypeString, clientVersionString
 }
 
 func HandleBeeperClientInfo(event *mevent.Event) error {
@@ -88,19 +101,25 @@ func HandleBeeperClientInfo(event *mevent.Event) error {
 		return err
 	}
 
-	conv, err := chatwootApi.GetChatwootConversation(conversationID)
-	customAttrs := conv.CustomAttributes
-	changed := false
-	for k, v := range GetConversationCustomAttrs(event) {
-		if customAttrs[k] != v {
-			changed = true
-			customAttrs[k] = v
+	deviceTypeKey, deviceVersion := GetCustomAttrForDevice(event)
+	if deviceTypeKey != "" && deviceVersion != "" {
+		conv, err := chatwootApi.GetChatwootConversation(conversationID)
+		if err != nil {
+			log.Error("Failed to get Chatwoot conversation", err)
+			return err
+		}
+		customAttrs := conv.CustomAttributes
+		if customAttrs[deviceTypeKey] != deviceVersion {
+			customAttrs[deviceTypeKey] = deviceVersion
+			log.Debugf("Setting custom attribute on the conversation %d / %s -> %s", conversationID, deviceTypeKey, deviceVersion)
+			err := chatwootApi.SetConversationCustomAttributes(conversationID, customAttrs)
+			if err != nil {
+				log.Errorf("Failed to set custom attributes on the conversation %s -> %s: %v", deviceTypeKey, deviceVersion, customAttrs)
+				return err
+			}
 		}
 	}
 
-	if changed {
-		return chatwootApi.SetConversationCustomAttributes(conversationID, customAttrs)
-	}
 	return nil
 }
 
@@ -143,7 +162,12 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 		}
 
 		log.Errorf("Chatwoot conversation not found for %s: %s", event.RoomID, err)
-		conversationID, err = createChatwootConversation(event.RoomID, contactMxid, GetConversationCustomAttrs(event))
+		var customAttrs map[string]string
+		deviceTypeKey, deviceVersion := GetCustomAttrForDevice(event)
+		if deviceTypeKey != "" && deviceVersion != "" {
+			customAttrs[deviceTypeKey] = deviceVersion
+		}
+		conversationID, err = createChatwootConversation(event.RoomID, contactMxid, customAttrs)
 		if err != nil {
 			log.Errorf("Error creating chatwoot conversation: %+v", err)
 			return
