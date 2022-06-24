@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"maunium.net/go/mautrix"
@@ -95,6 +96,8 @@ func GetCustomAttrForDevice(event *mevent.Event) (string, string) {
 	return clientTypeString, clientVersionString
 }
 
+var deviceVersionRegex = regexp.MustCompile(`(\S+)( \(last updated at .*\))?`)
+
 func HandleBeeperClientInfo(event *mevent.Event) error {
 	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(event.RoomID)
 	if err != nil {
@@ -109,9 +112,19 @@ func HandleBeeperClientInfo(event *mevent.Event) error {
 			return err
 		}
 		customAttrs := conv.CustomAttributes
-		if customAttrs[deviceTypeKey] != deviceVersion {
-			customAttrs[deviceTypeKey] = deviceVersion
-			log.Debugf("Setting custom attribute on the conversation %d / %s -> %s", conversationID, deviceTypeKey, deviceVersion)
+		currentDeviceVersion := customAttrs[deviceTypeKey]
+
+		version := deviceVersionRegex.FindStringSubmatch(customAttrs[deviceTypeKey])
+		if version != nil {
+			currentDeviceVersion = version[1]
+		}
+
+		if currentDeviceVersion != deviceVersion {
+			now := time.Now().Format("2006-01-02 15:04:05 UTC")
+			versionWithLastUpdated := fmt.Sprintf("%s (last updated at %s)", deviceVersion, now)
+			customAttrs[deviceTypeKey] = versionWithLastUpdated
+
+			log.Debugf("Setting custom attribute on the conversation %d / %s :: %s", conversationID, deviceTypeKey, versionWithLastUpdated)
 			err := chatwootApi.SetConversationCustomAttributes(conversationID, customAttrs)
 			if err != nil {
 				log.Errorf("Failed to set custom attributes on the conversation %s -> %s: %v", deviceTypeKey, deviceVersion, customAttrs)
