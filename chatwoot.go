@@ -81,6 +81,9 @@ func main() {
 	}
 
 	err = json.Unmarshal(configJson, &configuration)
+	if err != nil {
+		log.Fatalf("Failed to parse parse configuration JSON: %v", err)
+	}
 	username := mid.UserID(configuration.Username)
 	_, botHomeserver, err = username.Parse()
 	if err != nil {
