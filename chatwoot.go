@@ -84,7 +84,7 @@ func main() {
 	username := mid.UserID(configuration.Username)
 	_, botHomeserver, err = username.Parse()
 	if err != nil {
-		log.Fatal("Couldn't parse username")
+		log.Fatalf("Couldn't parse username: %v", err)
 	}
 
 	// Open the chatwoot database
