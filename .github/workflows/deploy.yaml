@@ -74,14 +74,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Pull latest
-        run: |
-          docker pull ${{ env.CI_REGISTRY_IMAGE }}:latest || true
-
       - name: Docker Build
         uses: docker/build-push-action@v2
         with:
           cache-from: ${{ env.CI_REGISTRY_IMAGE }}:latest
+          pull: true
           file: Dockerfile
           tags: |
             ${{ env.CI_REGISTRY_IMAGE }}:${{ github.sha }}
@@ -109,14 +106,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Tag latest on Beeper Docker registry
-        run: |
-          docker pull ${{ env.CI_REGISTRY_IMAGE }}:${{ github.sha }}
-          docker tag ${{ env.CI_REGISTRY_IMAGE }}:${{ github.sha }} ${{ env.CI_REGISTRY_IMAGE }}:latest
-          docker push ${{ env.CI_REGISTRY_IMAGE }}:latest
+      - uses: beeper/docker-retag-push-latest@main
+        with:
+          image: ${{ env.CI_REGISTRY_IMAGE }}
 
-      - name: Tag latest on ghcr
-        run: |
-          docker pull ${{ env.GHCR_REGISTRY_IMAGE }}:${{ github.sha }}
-          docker tag ${{ env.GHCR_REGISTRY_IMAGE }}:${{ github.sha }} ${{ env.GHCR_REGISTRY_IMAGE }}:latest
-          docker push ${{ env.GHCR_REGISTRY_IMAGE }}:latest
+      - uses: beeper/docker-retag-push-latest@main
+        with:
+          image: ${{ env.GHCR_REGISTRY_IMAGE }}
