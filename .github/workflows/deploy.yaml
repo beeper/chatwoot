@@ -2,6 +2,8 @@ name: Build, Test and Deploy
 
 on:
   push:
+  pull_request:
+    branches: [ master ]
 
 env:
   GO_VERSION: 1.19
