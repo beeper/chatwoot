@@ -20,8 +20,8 @@ import (
 	mevent "maunium.net/go/mautrix/event"
 	mid "maunium.net/go/mautrix/id"
 
-	"gitlab.com/beeper/chatwoot/chatwootapi"
-	"gitlab.com/beeper/chatwoot/store"
+	"github.com/beeper/chatwoot/chatwootapi"
+	"github.com/beeper/chatwoot/store"
 )
 
 var client *mautrix.Client

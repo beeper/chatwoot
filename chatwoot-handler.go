@@ -24,7 +24,7 @@ import (
 	"maunium.net/go/mautrix/format"
 	mid "maunium.net/go/mautrix/id"
 
-	"gitlab.com/beeper/chatwoot/chatwootapi"
+	"github.com/beeper/chatwoot/chatwootapi"
 )
 
 func SendMessage(roomId mid.RoomID, content mevent.MessageEventContent) (resp *mautrix.RespSendEvent, err error) {

@@ -14,7 +14,7 @@ import (
 	mevent "maunium.net/go/mautrix/event"
 	mid "maunium.net/go/mautrix/id"
 
-	"gitlab.com/beeper/chatwoot/chatwootapi"
+	"github.com/beeper/chatwoot/chatwootapi"
 )
 
 var createRoomLock sync.Mutex = sync.Mutex{}

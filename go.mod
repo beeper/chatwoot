@@ -1,4 +1,4 @@
-module gitlab.com/beeper/chatwoot
+module github.com/beeper/chatwoot
 
 go 1.19
 
