@@ -1,18 +1,17 @@
 package store
 
 import (
-	"database/sql"
-
 	mid "maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/util/dbutil"
 )
 
 type StateStore struct {
-	DB          *sql.DB
+	DB          *dbutil.Database
 	dialect     string
 	botUsername mid.UserID
 }
 
-func NewStateStore(db *sql.DB, dialect string, botUsername mid.UserID) *StateStore {
+func NewStateStore(db *dbutil.Database, dialect string, botUsername mid.UserID) *StateStore {
 	return &StateStore{DB: db, dialect: dialect, botUsername: botUsername}
 }
 

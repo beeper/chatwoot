@@ -19,6 +19,7 @@ import (
 	mcrypto "maunium.net/go/mautrix/crypto"
 	mevent "maunium.net/go/mautrix/event"
 	mid "maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/util/dbutil"
 
 	"github.com/beeper/chatwoot/chatwootapi"
 	"github.com/beeper/chatwoot/store"
@@ -107,16 +108,18 @@ func main() {
 		log.Fatalf("Invalid database scheme '%s'", dbUri.Scheme)
 	}
 
-	db, err := sql.Open(dbType, dbUri.String())
+	rawDB, err := sql.Open(dbType, dbUri.String())
 	if err != nil {
 		log.Fatalf("Could not open chatwoot database. %v", err)
+	}
+	db, err := dbutil.NewWithDB(rawDB, dbDialect)
+	if err != nil {
+		log.Fatalf("Could not wrap chatwoot database. %v", err)
 	}
 
 	// Make sure to exit cleanly
 	c := make(chan os.Signal, 1)
 	signal.Notify(c,
-		os.Interrupt,
-		os.Kill,
 		syscall.SIGABRT,
 		syscall.SIGHUP,
 		syscall.SIGINT,
@@ -126,7 +129,7 @@ func main() {
 	go func() {
 		for range c { // when the process is killed
 			log.Info("Cleaning up")
-			db.Close()
+			db.RawDB.Close()
 			os.Exit(0)
 		}
 	}()
@@ -187,17 +190,11 @@ func main() {
 	// Setup the crypto store
 	sqlCryptoStore := mcrypto.NewSQLCryptoStore(
 		db,
-		dbDialect,
+		CryptoLogger{},
 		username.String(),
 		client.DeviceID,
 		[]byte("chatwoot_cryptostore_key"),
-		CryptoLogger{},
 	)
-	err = sqlCryptoStore.CreateTables()
-	if err != nil {
-		log.Error(err)
-		log.Fatal("Could not create tables for the SQL crypto store.")
-	}
 
 	olmMachine = mcrypto.NewOlmMachine(client, &CryptoLogger{}, sqlCryptoStore, stateStore)
 	olmMachine.AllowKeyShare = AllowKeyShare
@@ -334,7 +331,7 @@ func AllowKeyShare(device *mcrypto.DeviceIdentity, info mevent.RequestedKeyInfo)
 	}
 }
 
-func FindDeviceID(db *sql.DB, accountID string) (deviceID mid.DeviceID) {
+func FindDeviceID(db *dbutil.Database, accountID string) (deviceID mid.DeviceID) {
 	err := db.QueryRow("SELECT device_id FROM crypto_account WHERE account_id=$1", accountID).Scan(&deviceID)
 	if err != nil && err != sql.ErrNoRows {
 		log.Warnf("Failed to scan device ID: %v", err)
