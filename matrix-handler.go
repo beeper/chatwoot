@@ -328,9 +328,21 @@ func HandleMatrixMessageContent(event *mevent.Event, conversationID int, content
 			}
 		}
 
-		cm, err = chatwootApi.SendAttachmentMessage(conversationID, content.Body, content.Info.MimeType, bytes.NewReader(data), messageType)
+		filename := content.Body
+		caption := ""
+		if content.FileName != "" {
+			filename = content.FileName
+			caption = content.Body
+		}
+
+		cm, err = chatwootApi.SendAttachmentMessage(conversationID, filename, content.Info.MimeType, bytes.NewReader(data), messageType)
 		if err != nil {
 			return nil, errors.New(fmt.Sprintf("Failed to send attachment message. Error: %+v", err))
+		}
+
+		if caption != "" {
+			_, captionErr := chatwootApi.SendTextMessage(conversationID, fmt.Sprintf("Caption: %s", caption), messageType)
+			log.Errorf("Failed to send caption message. Error: %+v", captionErr)
 		}
 	}
 
