@@ -195,6 +195,11 @@ func main() {
 		client.DeviceID,
 		[]byte("chatwoot_cryptostore_key"),
 	)
+	err = sqlCryptoStore.Upgrade()
+	if err != nil {
+		log.Error(err)
+		log.Fatal("Could not create tables for the SQL crypto store.")
+	}
 
 	olmMachine = mcrypto.NewOlmMachine(client, &CryptoLogger{}, sqlCryptoStore, stateStore)
 	olmMachine.AllowKeyShare = AllowKeyShare
