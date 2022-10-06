@@ -203,9 +203,8 @@ func main() {
 
 	olmMachine = mcrypto.NewOlmMachine(client, &CryptoLogger{}, sqlCryptoStore, stateStore)
 	olmMachine.AllowKeyShare = AllowKeyShare
-	err = olmMachine.Load()
-	if err != nil {
-		log.Errorf("Could not initialize encryption support. Encrypted rooms will not work.")
+	if err := olmMachine.Load(); err != nil {
+		log.Fatalf("Could not initialize encryption support. Encrypted rooms will not work. %+v", err)
 	}
 
 	syncer := client.Syncer.(*mautrix.DefaultSyncer)
