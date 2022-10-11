@@ -28,6 +28,7 @@ func (store *StateStore) SetChatwootMessageIdForMatrixEvent(eventID mid.EventID,
 }
 
 func (store *StateStore) GetMatrixEventIdsForChatwootMessage(chatwootMessageId int) []mid.EventID {
+	log.Debug("Getting matrix event IDs for chatwoot message ID ", chatwootMessageId)
 	rows, err := store.DB.Query(`
 		SELECT matrix_event_id
 		  FROM chatwoot_message_to_matrix_event
@@ -49,6 +50,7 @@ func (store *StateStore) GetMatrixEventIdsForChatwootMessage(chatwootMessageId i
 }
 
 func (store *StateStore) GetChatwootMessageIdsForMatrixEventId(matrixEventId mid.EventID) (messageIDs []int, err error) {
+	log.Debug("Getting chatwoot message IDs for matrix event ID ", matrixEventId)
 	var rows *sql.Rows
 	rows, err = store.DB.Query(`
 		SELECT chatwoot_message_id
