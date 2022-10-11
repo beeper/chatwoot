@@ -65,6 +65,10 @@ func (store *StateStore) CreateTables() error {
 		ALTER TABLE chatwoot_conversation_to_matrix_room
 		ADD COLUMN IF NOT EXISTS most_recent_event_id VARCHAR(255)
 		`,
+		`
+		ALTER TABLE chatwoot_message_to_matrix_event
+		DROP CONSTRAINT IF EXISTS chatwoot_message_to_matrix_event_matrix_event_id_key
+		`,
 	}
 
 	for _, query := range queries {

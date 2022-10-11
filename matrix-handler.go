@@ -150,8 +150,8 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 	defer log.Debugf("[message handler] Released send lock for %s", event.RoomID)
 	defer roomSendlocks[event.RoomID].Unlock()
 
-	if messageID, err := stateStore.GetChatwootMessageIdForMatrixEventId(event.ID); err == nil {
-		log.Info("Matrix Event ID ", event.ID, " already has a Chatwoot message with ID ", messageID)
+	if messageIDs, err := stateStore.GetChatwootMessageIdsForMatrixEventId(event.ID); err == nil {
+		log.Info("Matrix Event ID ", event.ID, " already has a Chatwoot message(s) with ID(s) ", messageIDs)
 		return
 	}
 
@@ -227,8 +227,8 @@ func HandleReaction(_ mautrix.EventSource, event *mevent.Event) {
 	defer log.Debugf("[reaction handler] Released send lock for %s", event.RoomID)
 	defer roomSendlocks[event.RoomID].Unlock()
 
-	if messageID, err := stateStore.GetChatwootMessageIdForMatrixEventId(event.ID); err == nil {
-		log.Info("Matrix Event ID ", event.ID, " already has a Chatwoot message with ID ", messageID)
+	if messageIDs, err := stateStore.GetChatwootMessageIdsForMatrixEventId(event.ID); err == nil {
+		log.Info("Matrix Event ID ", event.ID, " already has a Chatwoot message(s) with ID(s) ", messageIDs)
 		return
 	}
 
@@ -371,7 +371,7 @@ func HandleRedaction(_ mautrix.EventSource, event *mevent.Event) {
 	defer log.Debugf("[redaction handler] Released send lock for %s", event.RoomID)
 	defer roomSendlocks[event.RoomID].Unlock()
 
-	messageID, err := stateStore.GetChatwootMessageIdForMatrixEventId(event.Redacts)
+	messageIDs, err := stateStore.GetChatwootMessageIdsForMatrixEventId(event.ID)
 	if err != nil {
 		log.Info("[redaction handler] No Chatwoot message for Matrix event ", event.Redacts)
 		return
@@ -383,8 +383,10 @@ func HandleRedaction(_ mautrix.EventSource, event *mevent.Event) {
 		return
 	}
 
-	err = chatwootApi.DeleteMessage(conversationID, messageID)
-	if err != nil {
-		log.Infof("[redaction handler] Failed to delete Chatwoot message: %+v", err)
+	for _, messageID := range messageIDs {
+		err = chatwootApi.DeleteMessage(conversationID, messageID)
+		if err != nil {
+			log.Infof("[redaction handler] Failed to delete Chatwoot message: %+v", err)
+		}
 	}
 }

@@ -1,25 +1,25 @@
 package store
 
 import (
+	"database/sql"
+
 	log "github.com/sirupsen/logrus"
 	mid "maunium.net/go/mautrix/id"
 )
 
 func (store *StateStore) SetChatwootMessageIdForMatrixEvent(eventID mid.EventID, chatwootMessageId int) error {
-	log.Debug("Upserting row into chatwoot_message_to_matrix_event")
+	log.Debug("Inserting row into chatwoot_message_to_matrix_event")
 	tx, err := store.DB.Begin()
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
 
-	upsert := `
+	insert := `
 		INSERT INTO chatwoot_message_to_matrix_event (matrix_event_id, chatwoot_message_id)
 			VALUES ($1, $2)
-		ON CONFLICT (matrix_event_id) DO UPDATE
-			SET chatwoot_message_id = $2
 	`
-	if _, err := tx.Exec(upsert, eventID, chatwootMessageId); err != nil {
+	if _, err := tx.Exec(insert, eventID, chatwootMessageId); err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -48,14 +48,23 @@ func (store *StateStore) GetMatrixEventIdsForChatwootMessage(chatwootMessageId i
 	return eventIDs
 }
 
-func (store *StateStore) GetChatwootMessageIdForMatrixEventId(matrixEventId mid.EventID) (int, error) {
-	row := store.DB.QueryRow(`
+func (store *StateStore) GetChatwootMessageIdsForMatrixEventId(matrixEventId mid.EventID) (messageIDs []int, err error) {
+	var rows *sql.Rows
+	rows, err = store.DB.Query(`
 		SELECT chatwoot_message_id
 		  FROM chatwoot_message_to_matrix_event
 		 WHERE matrix_event_id = $1`, matrixEventId)
-	var messageID int
-	if err := row.Scan(&messageID); err != nil {
-		return messageID, err
+	if err != nil {
+		log.Error(err)
+		return
 	}
-	return messageID, nil
+	defer rows.Close()
+
+	var messageID int
+	for rows.Next() {
+		if err := rows.Scan(&messageID); err != nil {
+			messageIDs = append(messageIDs, messageID)
+		}
+	}
+	return messageIDs, nil
 }
