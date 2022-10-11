@@ -176,7 +176,7 @@ func (api *ChatwootAPI) GetChatwootConversation(conversationID int) (*Conversati
 }
 
 func (api *ChatwootAPI) CreateConversation(sourceID string, contactID int, additionalAttrs map[string]string) (*Conversation, error) {
-	values := map[string]interface{}{
+	values := map[string]any{
 		"source_id":             sourceID,
 		"inbox_id":              api.InboxID,
 		"contact_id":            contactID,
@@ -213,7 +213,7 @@ func (api *ChatwootAPI) CreateConversation(sourceID string, contactID int, addit
 }
 
 func (api *ChatwootAPI) AddConversationLabel(conversationID int, labels []string) error {
-	jsonValue, err := json.Marshal(map[string]interface{}{"labels": labels})
+	jsonValue, err := json.Marshal(map[string]any{"labels": labels})
 	if err != nil {
 		return err
 	}
@@ -237,7 +237,7 @@ func (api *ChatwootAPI) AddConversationLabel(conversationID int, labels []string
 }
 
 func (api *ChatwootAPI) SetConversationCustomAttributes(conversationID int, customAttrs map[string]string) error {
-	jsonValue, _ := json.Marshal(map[string]interface{}{
+	jsonValue, _ := json.Marshal(map[string]any{
 		"custom_attributes": customAttrs,
 	})
 	req, err := http.NewRequest(http.MethodPost, api.MakeUri(fmt.Sprintf("conversations/%d/custom_attributes", conversationID)), bytes.NewBuffer(jsonValue))
@@ -257,7 +257,7 @@ func (api *ChatwootAPI) SetConversationCustomAttributes(conversationID int, cust
 	return nil
 }
 
-func (api *ChatwootAPI) doSendTextMessage(conversationID int, jsonValues map[string]interface{}) (*Message, error) {
+func (api *ChatwootAPI) doSendTextMessage(conversationID int, jsonValues map[string]any) (*Message, error) {
 	jsonValue, _ := json.Marshal(jsonValues)
 	req, err := http.NewRequest(http.MethodPost, api.MakeUri(fmt.Sprintf("conversations/%d/messages", conversationID)), bytes.NewBuffer(jsonValue))
 	if err != nil {
@@ -289,12 +289,12 @@ func (api *ChatwootAPI) doSendTextMessage(conversationID int, jsonValues map[str
 }
 
 func (api *ChatwootAPI) SendTextMessage(conversationID int, content string, messageType MessageType) (*Message, error) {
-	values := map[string]interface{}{"content": content, "message_type": MessageTypeString(messageType), "private": false}
+	values := map[string]any{"content": content, "message_type": MessageTypeString(messageType), "private": false}
 	return api.doSendTextMessage(conversationID, values)
 }
 
 func (api *ChatwootAPI) SendPrivateMessage(conversationID int, content string) (*Message, error) {
-	values := map[string]interface{}{"content": content, "message_type": MessageTypeString(OutgoingMessage), "private": true}
+	values := map[string]any{"content": content, "message_type": MessageTypeString(OutgoingMessage), "private": true}
 	return api.doSendTextMessage(conversationID, values)
 }
 
@@ -375,7 +375,7 @@ func (api *ChatwootAPI) SendAttachmentMessage(conversationID int, filename strin
 	return &message, nil
 }
 
-func (api *ChatwootAPI) DownloadAttachment(url string) ([]byte, error) {
+func (api *ChatwootAPI) DownloadAttachment(url string) (*[]byte, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		log.Error(err)
@@ -395,7 +395,7 @@ func (api *ChatwootAPI) DownloadAttachment(url string) ([]byte, error) {
 		log.Error(err)
 		return nil, err
 	}
-	return data, err
+	return &data, err
 }
 
 func (api *ChatwootAPI) DeleteMessage(conversationID int, messageID int) error {

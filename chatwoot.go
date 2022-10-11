@@ -155,7 +155,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	_, err = DoRetry("login", func() (interface{}, error) {
+	_, err = DoRetry("login", func() (*mautrix.RespLogin, error) {
 		return client.Login(&mautrix.ReqLogin{
 			Type: mautrix.AuthTypePassword,
 			Identifier: mautrix.UserIdentifier{
@@ -218,7 +218,7 @@ func main() {
 
 		if event.GetStateKey() == username.String() && event.Content.AsMember().Membership == mevent.MembershipInvite {
 			log.Info("Joining ", event.RoomID)
-			_, err := DoRetry("join room", func() (interface{}, error) {
+			_, err := DoRetry("join room", func() (*mautrix.RespJoinRoom, error) {
 				return client.JoinRoomByID(event.RoomID)
 			})
 			if err != nil {
@@ -270,7 +270,7 @@ func main() {
 				return
 			}
 
-			DoRetry(fmt.Sprintf("send private error message to %d for %+v", conversationID, decryptErr), func() (interface{}, error) {
+			DoRetry(fmt.Sprintf("send private error message to %d for %+v", conversationID, decryptErr), func() (*chatwootapi.Message, error) {
 				return chatwootApi.SendPrivateMessage(
 					conversationID,
 					fmt.Sprintf("**Failed to decrypt Matrix event. You probably missed a message!**\n\nError: %+v", decryptErr))

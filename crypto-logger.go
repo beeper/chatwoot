@@ -13,23 +13,23 @@ type CryptoLogger struct{}
 
 var _ crypto.Logger = &CryptoLogger{}
 
-func (l CryptoLogger) Error(message string, args ...interface{}) {
+func (l CryptoLogger) Error(message string, args ...any) {
 	log.Errorf(message, args...)
 }
 
-func (l CryptoLogger) Warn(message string, args ...interface{}) {
+func (l CryptoLogger) Warn(message string, args ...any) {
 	log.Warnf(message, args...)
 }
 
-func (l CryptoLogger) Debug(message string, args ...interface{}) {
+func (l CryptoLogger) Debug(message string, args ...any) {
 	log.Debugf(message, args...)
 }
 
-func (l CryptoLogger) Trace(message string, args ...interface{}) {
+func (l CryptoLogger) Trace(message string, args ...any) {
 	log.Tracef(message, args...)
 }
 
-func (l CryptoLogger) QueryTiming(ctx context.Context, method, query string, args []interface{}, duration time.Duration) {
+func (l CryptoLogger) QueryTiming(ctx context.Context, method, query string, args []any, duration time.Duration) {
 	if duration > 1*time.Second {
 		log.Warnf("%s(%s) took %.3f seconds", method, query, duration.Seconds())
 	}

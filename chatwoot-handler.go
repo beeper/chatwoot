@@ -28,7 +28,7 @@ import (
 )
 
 func SendMessage(roomId mid.RoomID, content mevent.MessageEventContent) (resp *mautrix.RespSendEvent, err error) {
-	r, err := DoRetry("send message to "+roomId.String(), func() (interface{}, error) {
+	r, err := DoRetry("send message to "+roomId.String(), func() (*mautrix.RespSendEvent, error) {
 		if stateStore.IsEncrypted(roomId) {
 			log.Debugf("Sending encrypted event to %s", roomId)
 			encrypted, err := olmMachine.EncryptMegolmEvent(roomId, mevent.EventMessage, content)
@@ -60,18 +60,18 @@ func SendMessage(roomId mid.RoomID, content mevent.MessageEventContent) (resp *m
 		log.Errorf("Failed to send message to %s: %s", roomId, err)
 		return nil, err
 	}
-	return r.(*mautrix.RespSendEvent), err
+	return r, err
 }
 
 func RetrieveAndUploadMediaToMatrix(url string) ([]byte, *mevent.EncryptedFileInfo, string, error) {
 	// Download the attachment
-	attachmentResp, err := DoRetry(fmt.Sprintf("Download attachment: %s", url), func() (interface{}, error) {
+	attachmentResp, err := DoRetry(fmt.Sprintf("Download attachment: %s", url), func() (*[]byte, error) {
 		return chatwootApi.DownloadAttachment(url)
 	})
 	if err != nil {
 		return []byte{}, nil, "", err
 	}
-	attachmentPlainData := attachmentResp.([]byte)
+	attachmentPlainData := *attachmentResp
 
 	file := mevent.EncryptedFileInfo{
 		EncryptedFile: *attachment.NewEncryptedFile(),
@@ -87,7 +87,7 @@ func RetrieveAndUploadMediaToMatrix(url string) ([]byte, *mevent.EncryptedFileIn
 		filename = match[2]
 	}
 
-	resp, err := DoRetry(fmt.Sprintf("upload %s to Matrix", filename), func() (interface{}, error) {
+	resp, err := DoRetry(fmt.Sprintf("upload %s to Matrix", filename), func() (*mautrix.RespMediaUpload, error) {
 		return client.UploadMedia(mautrix.ReqUploadMedia{
 			Content:       bytes.NewReader(encryptedFileData),
 			ContentLength: int64(len(encryptedFileData)),
@@ -98,7 +98,7 @@ func RetrieveAndUploadMediaToMatrix(url string) ([]byte, *mevent.EncryptedFileIn
 	if err != nil {
 		return []byte{}, nil, "", err
 	}
-	file.URL = resp.(*mautrix.RespMediaUpload).ContentURI.CUString()
+	file.URL = (*resp).ContentURI.CUString()
 
 	return attachmentPlainData, &file, filename, nil
 }
@@ -106,7 +106,7 @@ func RetrieveAndUploadMediaToMatrix(url string) ([]byte, *mevent.EncryptedFileIn
 func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	webhookBody, _ := ioutil.ReadAll(r.Body)
 
-	var eventJson map[string]interface{}
+	var eventJson map[string]any
 	err := json.Unmarshal(webhookBody, &eventJson)
 	if err != nil {
 		log.Errorf("Error decoding webhook body: %+v", err)
@@ -125,7 +125,7 @@ func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			conversationID := csc.ID
 			err = HandleConversationStatusChanged(csc)
 			if err != nil {
-				DoRetry(fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func() (interface{}, error) {
+				DoRetry(fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func() (*chatwootapi.Message, error) {
 					return chatwootApi.SendPrivateMessage(
 						conversationID,
 						fmt.Sprintf("*Error occurred while handling Chatwoot conversation status changed.*\n\nError: %+v", err))
@@ -142,7 +142,7 @@ func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			conversationID := mc.Conversation.ID
 			err = HandleMessageCreated(mc)
 			if err != nil {
-				DoRetry(fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func() (interface{}, error) {
+				DoRetry(fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func() (*chatwootapi.Message, error) {
 					return chatwootApi.SendPrivateMessage(
 						conversationID,
 						fmt.Sprintf("**Error occurred while handling Chatwoot message. The message may not have been sent to Matrix!**\n\nError: %+v", err))
@@ -165,7 +165,7 @@ func HandleConversationStatusChanged(csc chatwootapi.ConversationStatusChanged) 
 		return err
 	}
 
-	_, err = DoRetry(fmt.Sprintf("send read receipt to %s for event %s", roomID, mostRecentEventID), func() (interface{}, error) {
+	_, err = DoRetry(fmt.Sprintf("send read receipt to %s for event %s", roomID, mostRecentEventID), func() (*any, error) {
 		return nil, client.MarkRead(roomID, mostRecentEventID)
 	})
 	if err != nil {
@@ -311,7 +311,7 @@ func HandleMessageCreated(mc chatwootapi.MessageCreated) error {
 		stateStore.SetChatwootMessageIdForMatrixEvent(resp.EventID, mc.ID)
 	}
 
-	_, err = DoRetry(fmt.Sprintf("send read receipt to %s for event %s", roomID, resp.EventID), func() (interface{}, error) {
+	_, err = DoRetry(fmt.Sprintf("send read receipt to %s for event %s", roomID, resp.EventID), func() (*any, error) {
 		return nil, client.MarkRead(roomID, resp.EventID)
 	})
 	if err != nil {

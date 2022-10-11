@@ -8,7 +8,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func DoRetry(description string, fn func() (interface{}, error)) (interface{}, error) {
+func DoRetry[T any](description string, fn func() (*T, error)) (*T, error) {
 	var err error
 	b, err := retry.NewFibonacci(1 * time.Second)
 	if err != nil {
@@ -17,7 +17,7 @@ func DoRetry(description string, fn func() (interface{}, error)) (interface{}, e
 	b = retry.WithMaxRetries(5, b)
 	for {
 		log.Info("trying: ", description)
-		var val interface{}
+		var val *T
 		val, err = fn()
 		if err == nil {
 			log.Info(description, " succeeded")

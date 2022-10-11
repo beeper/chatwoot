@@ -187,19 +187,22 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 		}
 	}
 
-	cm, err := DoRetry(fmt.Sprintf("handle matrix event %s in conversation %d", event.ID, conversationID), func() (interface{}, error) {
+	cm, err := DoRetry(fmt.Sprintf("handle matrix event %s in conversation %d", event.ID, conversationID), func() (*[]*chatwootapi.Message, error) {
 		content := event.Content.AsMessage()
-		return HandleMatrixMessageContent(event, conversationID, content)
+		messages, err := HandleMatrixMessageContent(event, conversationID, content)
+		return &messages, err
 	})
 	if err != nil {
-		DoRetry(fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func() (interface{}, error) {
+		DoRetry(fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func() (*chatwootapi.Message, error) {
 			return chatwootApi.SendPrivateMessage(
 				conversationID,
 				fmt.Sprintf("**Error occurred while receiving a Matrix message. You may have missed a message!**\n\nError: %+v", err))
 		})
 		return
 	}
-	stateStore.SetChatwootMessageIdForMatrixEvent(event.ID, cm.(*chatwootapi.Message).ID)
+	for _, m := range *cm {
+		stateStore.SetChatwootMessageIdForMatrixEvent(event.ID, m.ID)
+	}
 	content := event.Content.AsMessage()
 	if content.MsgType == mevent.MsgText || content.MsgType == mevent.MsgNotice {
 		linearLinks := []string{}
@@ -235,7 +238,7 @@ func HandleReaction(_ mautrix.EventSource, event *mevent.Event) {
 		return
 	}
 
-	cm, err := DoRetry(fmt.Sprintf("send notification of reaction to %d", conversationID), func() (interface{}, error) {
+	cm, err := DoRetry(fmt.Sprintf("send notification of reaction to %d", conversationID), func() (*chatwootapi.Message, error) {
 		reaction := event.Content.AsReaction()
 		reactedEvent, err := client.GetEvent(event.RoomID, reaction.RelatesTo.EventID)
 		if err != nil {
@@ -270,24 +273,21 @@ func HandleReaction(_ mautrix.EventSource, event *mevent.Event) {
 			chatwootapi.IncomingMessage)
 	})
 	if err != nil {
-		DoRetry(fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func() (interface{}, error) {
+		DoRetry(fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func() (*chatwootapi.Message, error) {
 			return chatwootApi.SendPrivateMessage(
 				conversationID,
 				fmt.Sprintf("**Error occurred while receiving a Matrix reaction. You may have missed a message reaction!**\n\nError: %+v", err))
 		})
 		return
 	}
-	stateStore.SetChatwootMessageIdForMatrixEvent(event.ID, cm.(*chatwootapi.Message).ID)
+	stateStore.SetChatwootMessageIdForMatrixEvent(event.ID, (*cm).ID)
 }
 
-func HandleMatrixMessageContent(event *mevent.Event, conversationID int, content *mevent.MessageEventContent) (*chatwootapi.Message, error) {
+func HandleMatrixMessageContent(event *mevent.Event, conversationID int, content *mevent.MessageEventContent) ([]*chatwootapi.Message, error) {
 	messageType := chatwootapi.IncomingMessage
 	if configuration.Username == event.Sender.String() {
 		messageType = chatwootapi.OutgoingMessage
 	}
-
-	var cm *chatwootapi.Message
-	var err error
 
 	switch content.MsgType {
 	case mevent.MsgText, mevent.MsgNotice:
@@ -298,11 +298,13 @@ func HandleMatrixMessageContent(event *mevent.Event, conversationID int, content
 				body = " \\* " + body[3:]
 			}
 		}
-		cm, err = chatwootApi.SendTextMessage(conversationID, body, messageType)
+		cm, err := chatwootApi.SendTextMessage(conversationID, body, messageType)
+		return []*chatwootapi.Message{cm}, err
 
 	case mevent.MsgEmote:
 		localpart, _, _ := event.Sender.Parse()
-		cm, err = chatwootApi.SendTextMessage(conversationID, fmt.Sprintf(" \\* %s %s", localpart, content.Body), messageType)
+		cm, err := chatwootApi.SendTextMessage(conversationID, fmt.Sprintf(" \\* %s %s", localpart, content.Body), messageType)
+		return []*chatwootapi.Message{cm}, err
 
 	case mevent.MsgAudio, mevent.MsgFile, mevent.MsgImage, mevent.MsgVideo:
 		var file *mevent.EncryptedFileInfo
@@ -335,18 +337,26 @@ func HandleMatrixMessageContent(event *mevent.Event, conversationID int, content
 			caption = content.Body
 		}
 
-		cm, err = chatwootApi.SendAttachmentMessage(conversationID, filename, content.Info.MimeType, bytes.NewReader(data), messageType)
+		cm, err := chatwootApi.SendAttachmentMessage(conversationID, filename, content.Info.MimeType, bytes.NewReader(data), messageType)
 		if err != nil {
 			return nil, errors.New(fmt.Sprintf("Failed to send attachment message. Error: %+v", err))
 		}
+		messages := []*chatwootapi.Message{cm}
 
 		if caption != "" {
-			_, captionErr := chatwootApi.SendTextMessage(conversationID, fmt.Sprintf("Caption: %s", caption), messageType)
-			log.Errorf("Failed to send caption message. Error: %+v", captionErr)
+			captionMessage, captionErr := chatwootApi.SendTextMessage(conversationID, fmt.Sprintf("Caption: %s", caption), messageType)
+			if captionErr != nil {
+				log.Errorf("Failed to send caption message. Error: %+v", captionErr)
+			} else {
+				messages = append(messages, captionMessage)
+			}
 		}
-	}
 
-	return cm, err
+		return messages, err
+
+	default:
+		return nil, errors.New(fmt.Sprintf("Unsupported message type %s in %s", content.MsgType, event.ID))
+	}
 }
 
 func HandleRedaction(_ mautrix.EventSource, event *mevent.Event) {
