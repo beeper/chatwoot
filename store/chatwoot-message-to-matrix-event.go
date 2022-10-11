@@ -8,7 +8,7 @@ import (
 )
 
 func (store *StateStore) SetChatwootMessageIdForMatrixEvent(eventID mid.EventID, chatwootMessageId int) error {
-	log.Debug("Inserting row into chatwoot_message_to_matrix_event")
+	log.Debug("Inserting row into chatwoot_message_to_matrix_event. ", eventID, " -> ", chatwootMessageId)
 	tx, err := store.DB.Begin()
 	if err != nil {
 		tx.Rollback()
@@ -66,5 +66,5 @@ func (store *StateStore) GetChatwootMessageIdsForMatrixEventId(matrixEventId mid
 			messageIDs = append(messageIDs, messageID)
 		}
 	}
-	return messageIDs, nil
+	return messageIDs, rows.Err()
 }
