@@ -64,11 +64,8 @@ func (store *StateStore) GetChatwootMessageIdsForMatrixEventId(matrixEventId mid
 
 	var messageID int
 	for rows.Next() {
-		if err := rows.Scan(&messageID); err != nil {
+		if err := rows.Scan(&messageID); err == nil {
 			messageIDs = append(messageIDs, messageID)
-		} else {
-			log.Error("Error scanning chatwoot message ID: ", err)
-			return nil, err
 		}
 	}
 	log.Debugf("Found %v chatwoot message IDs for matrix event ID %s", messageIDs, matrixEventId)
