@@ -273,7 +273,7 @@ func main() {
 			DoRetry(fmt.Sprintf("send private error message to %d for %+v", conversationID, decryptErr), func() (*chatwootapi.Message, error) {
 				return chatwootApi.SendPrivateMessage(
 					conversationID,
-					fmt.Sprintf("**Failed to decrypt Matrix event. You probably missed a message!**\n\nError: %+v", decryptErr))
+					fmt.Sprintf("**Failed to decrypt Matrix event (%s). You probably missed a message!**\n\nError: %+v", event.ID, decryptErr))
 			})
 		} else {
 			log.Debugf("Received encrypted event from %s in %s", event.Sender, event.RoomID)
