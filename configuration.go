@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog"
 )
 
 type Configuration struct {
@@ -32,8 +32,8 @@ type Configuration struct {
 	ListenPort int `yaml:"listen_port"`
 }
 
-func (c *Configuration) GetPassword() (string, error) {
-	log.Debug("Reading password from ", c.PasswordFile)
+func (c *Configuration) GetPassword(log *zerolog.Logger) (string, error) {
+	log.Debug().Str("password_file", c.PasswordFile).Msg("reading password from file")
 	buf, err := os.ReadFile(c.PasswordFile)
 	if err != nil {
 		return "", err
@@ -41,8 +41,8 @@ func (c *Configuration) GetPassword() (string, error) {
 	return strings.TrimSpace(string(buf)), nil
 }
 
-func (c *Configuration) GetChatwootAccessToken() (string, error) {
-	log.Debug("Reading access token from ", c.ChatwootAccessTokenFile)
+func (c *Configuration) GetChatwootAccessToken(log *zerolog.Logger) (string, error) {
+	log.Debug().Str("access_token_file", c.ChatwootAccessTokenFile).Msg("reading access token from file")
 	buf, err := os.ReadFile(c.ChatwootAccessTokenFile)
 	if err != nil {
 		return "", err

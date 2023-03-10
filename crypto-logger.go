@@ -4,45 +4,60 @@ import (
 	"context"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-	"maunium.net/go/mautrix/crypto"
+	"github.com/rs/zerolog"
 )
 
 // Simple crypto.Logger implementation that just prints to stdout.
-type CryptoLogger struct{}
+type CryptoLogger struct {
+	log *zerolog.Logger
+}
 
-var _ crypto.Logger = &CryptoLogger{}
+func NewCryptoLogger(log *zerolog.Logger) *CryptoLogger {
+	return &CryptoLogger{
+		log: log,
+	}
+}
 
 func (l CryptoLogger) Error(message string, args ...any) {
-	log.Errorf(message, args...)
+	l.log.Error().Msgf(message, args...)
 }
 
 func (l CryptoLogger) Warn(message string, args ...any) {
-	log.Warnf(message, args...)
+	l.log.Warn().Msgf(message, args...)
 }
 
 func (l CryptoLogger) Debug(message string, args ...any) {
-	log.Debugf(message, args...)
+	l.log.Debug().Msgf(message, args...)
 }
 
 func (l CryptoLogger) Trace(message string, args ...any) {
-	log.Tracef(message, args...)
+	l.log.Trace().Msgf(message, args...)
 }
 
 func (l CryptoLogger) QueryTiming(ctx context.Context, method, query string, args []any, duration time.Duration) {
 	if duration > 1*time.Second {
-		log.Warnf("%s(%s) took %.3f seconds", method, query, duration.Seconds())
+		l.log.Warn().Str("method", method).Str("query", query).Dur("duration", duration).Msg("query took more than 1 second")
 	}
 }
 
 func (l CryptoLogger) WarnUnsupportedVersion(current, latest int) {
-	log.Warnf("Unsupported database schema version: currently on v%d, latest known: v%d - continuing anyway", current, latest)
+	l.log.Warn().
+		Int("current_version", current).
+		Int("latest_version", latest).
+		Msg("unsupported database schema version, but continuing anyway")
 }
 
 func (l CryptoLogger) PrepareUpgrade(current, latest int) {
-	log.Infof("Database currently on v%d, latest: v%d", current, latest)
+	l.log.Info().
+		Int("current_version", current).
+		Int("latest_version", latest).
+		Msg("preparing database upgrade")
 }
 
 func (l CryptoLogger) DoUpgrade(from, to int, message string) {
-	log.Infof("Upgrading database from v%d to v%d: %s", from, to, message)
+	l.log.Info().
+		Int("from", from).
+		Int("to", to).
+		Str("msg", message).
+		Msg("upgrading database")
 }
