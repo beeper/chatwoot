@@ -38,3 +38,17 @@ render_markdown: false
 # ===== Webhook Listener Settings =====
 # The port to listen for webhook events on. Defaults to 8080
 listen_port: 8080
+
+# ===== Logger Settings =====
+# See https://github.com/tulir/zeroconfig for details.
+logging:
+  min_level: debug
+  writers:
+    - type: stdout
+      format: pretty-colored
+    - type: file
+      format: json
+      filename: ./logs/chatwoot-bot.log
+      max_size: 100
+      max_backups: 10
+      compress: true

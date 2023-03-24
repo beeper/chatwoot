@@ -6,7 +6,13 @@ require (
 	github.com/jackc/pgx/v4 v4.13.0
 	github.com/sethvargo/go-retry v0.1.0
 	github.com/sirupsen/logrus v1.8.1
+	go.mau.fi/zeroconfig v0.1.2
 	maunium.net/go/mautrix v0.12.1
+)
+
+require (
+	github.com/coreos/go-systemd/v22 v22.3.3-0.20220203105225-a9a7ef127534 // indirect
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
 
 require (
@@ -21,7 +27,7 @@ require (
 	github.com/jackc/pgtype v1.8.1 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
-	github.com/rs/zerolog v1.27.0 // indirect
+	github.com/rs/zerolog v1.29.0
 	github.com/tidwall/gjson v1.14.3 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect

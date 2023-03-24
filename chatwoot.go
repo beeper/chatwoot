@@ -8,14 +8,11 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	_ "github.com/jackc/pgx/v4/stdlib"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
+	globallog "github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v2"
 	"maunium.net/go/mautrix"
 	mcrypto "maunium.net/go/mautrix/crypto"
@@ -42,31 +39,13 @@ var VERSION = "0.2.1"
 func main() {
 	// Arg parsing
 	configPath := flag.String("config", "./config.yaml", "config file location")
-	logLevelStr := flag.String("loglevel", "debug", "the log level")
 	flag.Parse()
 
-	// Configure logging
-	if os.Getenv("CHATWOOT_LOGGING_CONSOLE") != "" {
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339})
-	} else {
-		log.Logger = log.Output(os.Stdout)
-	}
-
-	globalLevel, err := zerolog.ParseLevel(strings.ToLower(*logLevelStr))
-	if err != nil {
-		log.Fatal().Str("configured_level", *logLevelStr).Msg("Invalid log level in config")
-	} else {
-		zerolog.SetGlobalLevel(globalLevel)
-		log.WithLevel(globalLevel).Str("configured_level", *logLevelStr).Msg("Logging level configured")
-	}
-
-	log.Info().Msg("Chatwoot service starting...")
-
 	// Load configuration
-	log.Info().Str("config_path", *configPath).Msg("Reading config")
+	globallog.Info().Str("config_path", *configPath).Msg("Reading config")
 	configYaml, err := os.ReadFile(*configPath)
 	if err != nil {
-		log.Fatal().Err(err).Str("config_path", *configPath).Msg("Failed reading the config")
+		globallog.Fatal().Err(err).Str("config_path", *configPath).Msg("Failed reading the config")
 	}
 
 	// Default configuration values
@@ -80,14 +59,23 @@ func main() {
 
 	err = yaml.Unmarshal(configYaml, &configuration)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to parse configuration YAML")
+		globallog.Fatal().Err(err).Msg("Failed to parse configuration YAML")
 	}
+
+	// Setup logging
+	log, err := configuration.Logging.Compile()
+	if err != nil {
+		globallog.Fatal().Err(err).Msg("Failed to compile logging configuration")
+	}
+
 	log.Info().Interface("configuration", configuration).Msg("Config loaded")
 	username := mid.UserID(configuration.Username)
 	_, botHomeserver, err = username.Parse()
 	if err != nil {
 		log.Fatal().Err(err).Msg("Couldn't parse username")
 	}
+
+	log.Info().Msg("Chatwoot service starting...")
 
 	// Open the chatwoot database
 	dbUri, err := url.Parse(configuration.DBConnectionString)
@@ -141,7 +129,7 @@ func main() {
 	}
 
 	log.Info().Msg("Logging in")
-	password, err := configuration.GetPassword(&log.Logger)
+	password, err := configuration.GetPassword(log)
 	if err != nil {
 		log.Fatal().Err(err).Str("password_file", configuration.PasswordFile).Msg("Could not read password from ")
 	}
@@ -174,7 +162,7 @@ func main() {
 	// set the client store on the client.
 	client.Store = stateStore
 
-	accessToken, err := configuration.GetChatwootAccessToken(&log.Logger)
+	accessToken, err := configuration.GetChatwootAccessToken(log)
 	if err != nil {
 		log.Fatal().Err(err).Str("access_token_file", configuration.ChatwootAccessTokenFile).Msg("Could not read access token")
 	}
@@ -186,7 +174,7 @@ func main() {
 	)
 
 	// Setup the crypto store
-	cryptoLogger := NewCryptoLogger(&log.Logger)
+	cryptoLogger := NewCryptoLogger(log)
 	sqlCryptoStore := mcrypto.NewSQLCryptoStore(
 		db,
 		cryptoLogger,
@@ -319,7 +307,7 @@ func main() {
 }
 
 func AllowKeyShare(device *mcrypto.DeviceIdentity, info mevent.RequestedKeyInfo) *mcrypto.KeyShareRejection {
-	log := log.With().
+	log := globallog.With().
 		Str("device_id", device.UserID.String()).
 		Str("room_id", info.RoomID.String()).
 		Str("session_id", info.SessionID.String()).
@@ -358,7 +346,7 @@ func AllowKeyShare(device *mcrypto.DeviceIdentity, info mevent.RequestedKeyInfo)
 func FindDeviceID(db *dbutil.Database, accountID string) (deviceID mid.DeviceID) {
 	err := db.QueryRow("SELECT device_id FROM crypto_account WHERE account_id=$1", accountID).Scan(&deviceID)
 	if err != nil && err != sql.ErrNoRows {
-		log.Warn().Err(err).Msg("failed to scan device ID")
+		globallog.Warn().Err(err).Msg("failed to scan device ID")
 	}
 	return
 }

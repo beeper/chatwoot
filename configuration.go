@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/zeroconfig"
 )
 
 type Configuration struct {
@@ -30,6 +31,9 @@ type Configuration struct {
 
 	// Webhook listener settings
 	ListenPort int `yaml:"listen_port"`
+
+	// Logging configuration
+	Logging zeroconfig.Config `yaml:"logging"`
 }
 
 func (c *Configuration) GetPassword(log *zerolog.Logger) (string, error) {
