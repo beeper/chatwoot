@@ -74,13 +74,13 @@ func RetrieveAndUploadMediaToMatrix(ctx context.Context, url string) ([]byte, *e
 	if err != nil {
 		return []byte{}, nil, "", err
 	}
-	attachmentPlainData := *attachmentResp
+	attachmentData := *attachmentResp
 
 	file := event.EncryptedFileInfo{
 		EncryptedFile: *attachment.NewEncryptedFile(),
 		URL:           "",
 	}
-	encryptedFileData := file.Encrypt(attachmentPlainData)
+	file.EncryptInPlace(attachmentData)
 
 	// Extract the filename from the data URL
 	re := regexp.MustCompile(`^(.*/)?(?:$|(.+?)(?:(\.[^.]*$)|$))`)
@@ -92,8 +92,8 @@ func RetrieveAndUploadMediaToMatrix(ctx context.Context, url string) ([]byte, *e
 
 	resp, err := DoRetry(ctx, fmt.Sprintf("upload %s to Matrix", filename), func(context.Context) (*mautrix.RespMediaUpload, error) {
 		return client.UploadMedia(mautrix.ReqUploadMedia{
-			Content:       bytes.NewReader(encryptedFileData),
-			ContentLength: int64(len(encryptedFileData)),
+			Content:       bytes.NewReader(attachmentData),
+			ContentLength: int64(len(attachmentData)),
 			ContentType:   "application/octet-stream",
 			FileName:      filename,
 		})
@@ -103,7 +103,7 @@ func RetrieveAndUploadMediaToMatrix(ctx context.Context, url string) ([]byte, *e
 	}
 	file.URL = (*resp).ContentURI.CUString()
 
-	return attachmentPlainData, &file, filename, nil
+	return attachmentData, &file, filename, nil
 }
 
 func HandleWebhook(w http.ResponseWriter, r *http.Request) {

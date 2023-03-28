@@ -389,7 +389,7 @@ func HandleMatrixMessageContent(ctx context.Context, event *mevent.Event, conver
 		}
 
 		if file != nil {
-			data, err = file.Decrypt(data)
+			err = file.DecryptInPlace(data)
 			if err != nil {
 				return nil, fmt.Errorf("failed to decrypt media in %s: %w", event.ID, err)
 			}

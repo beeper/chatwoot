@@ -326,7 +326,7 @@ func main() {
 	}
 }
 
-func AllowKeyShare(device *mcrypto.DeviceIdentity, info mevent.RequestedKeyInfo) *mcrypto.KeyShareRejection {
+func AllowKeyShare(device *mid.Device, info mevent.RequestedKeyInfo) *mcrypto.KeyShareRejection {
 	log := globallog.With().
 		Str("device_id", device.UserID.String()).
 		Str("room_id", info.RoomID.String()).

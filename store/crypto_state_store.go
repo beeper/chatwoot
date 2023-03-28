@@ -92,6 +92,10 @@ func (store *StateStore) SetMembership(ctx context.Context, event *mevent.Event)
 }
 
 func (store *StateStore) SetEncryptionEvent(ctx context.Context, event *mevent.Event) {
+	if event == nil {
+		return
+	}
+
 	log.Debug().Str("room_id", event.RoomID.String()).Msg("updating encryption_event for room")
 	tx, err := store.DB.Begin()
 	if err != nil {
@@ -100,9 +104,6 @@ func (store *StateStore) SetEncryptionEvent(ctx context.Context, event *mevent.E
 	}
 
 	var encryptionEventJson []byte
-	if event == nil {
-		encryptionEventJson = nil
-	}
 	encryptionEventJson, err = json.Marshal(event)
 	if err != nil {
 		encryptionEventJson = nil
