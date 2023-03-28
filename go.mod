@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/jackc/pgx/v4 v4.18.1
-	github.com/sethvargo/go-retry v0.1.0
+	github.com/sethvargo/go-retry v0.2.4
 	go.mau.fi/zeroconfig v0.1.2
 	maunium.net/go/mautrix v0.15.1-0.20230328085008-b961896f2416
 )

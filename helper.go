@@ -12,10 +12,7 @@ import (
 func DoRetry[T any](ctx context.Context, description string, fn func(context.Context) (*T, error)) (*T, error) {
 	log := zerolog.Ctx(ctx).With().Str("do_retry", description).Logger()
 	var err error
-	b, err := retry.NewFibonacci(1 * time.Second)
-	if err != nil {
-		panic(err)
-	}
+	b := retry.NewFibonacci(1 * time.Second)
 	b = retry.WithMaxRetries(5, b)
 	attemptNum := 0
 	for {
