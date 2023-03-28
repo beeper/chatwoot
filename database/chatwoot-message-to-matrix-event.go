@@ -1,14 +1,14 @@
-package store
+package database
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/rs/zerolog"
-	mid "maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/util/dbutil"
 )
 
-func (store *StateStore) SetChatwootMessageIdForMatrixEvent(ctx context.Context, eventID mid.EventID, chatwootMessageId int) error {
+func (store *Database) SetChatwootMessageIdForMatrixEvent(ctx context.Context, eventID id.EventID, chatwootMessageId int) error {
 	log := zerolog.Ctx(ctx).With().
 		Str("event_id", eventID.String()).
 		Int("chatwoot_message_id", chatwootMessageId).
@@ -34,7 +34,7 @@ func (store *StateStore) SetChatwootMessageIdForMatrixEvent(ctx context.Context,
 	return tx.Commit()
 }
 
-func (store *StateStore) GetMatrixEventIdsForChatwootMessage(ctx context.Context, chatwootMessageId int) []mid.EventID {
+func (store *Database) GetMatrixEventIdsForChatwootMessage(ctx context.Context, chatwootMessageId int) []id.EventID {
 	log := zerolog.Ctx(ctx).With().Int("message_id", chatwootMessageId).Logger()
 	ctx = log.WithContext(ctx)
 
@@ -43,14 +43,14 @@ func (store *StateStore) GetMatrixEventIdsForChatwootMessage(ctx context.Context
 		SELECT matrix_event_id
 		  FROM chatwoot_message_to_matrix_event
 		 WHERE chatwoot_message_id = $1`, chatwootMessageId)
-	eventIDs := make([]mid.EventID, 0)
+	eventIDs := make([]id.EventID, 0)
 	if err != nil {
 		log.Err(err).Msg("failed to get Matrix event IDs for chatwoot message")
 		return eventIDs
 	}
 	defer rows.Close()
 
-	var eventID mid.EventID
+	var eventID id.EventID
 	for rows.Next() {
 		if err := rows.Scan(&eventID); err == nil {
 			eventIDs = append(eventIDs, eventID)
@@ -59,12 +59,12 @@ func (store *StateStore) GetMatrixEventIdsForChatwootMessage(ctx context.Context
 	return eventIDs
 }
 
-func (store *StateStore) GetChatwootMessageIdsForMatrixEventID(ctx context.Context, matrixEventID mid.EventID) (messageIDs []int, err error) {
+func (store *Database) GetChatwootMessageIdsForMatrixEventID(ctx context.Context, matrixEventID id.EventID) (messageIDs []int, err error) {
 	log := zerolog.Ctx(ctx).With().Str("event_id", matrixEventID.String()).Logger()
 	ctx = log.WithContext(ctx)
 
 	log.Debug().Msg("getting chatwoot message IDs for matrix event ID")
-	var rows *sql.Rows
+	var rows dbutil.Rows
 	rows, err = store.DB.QueryContext(ctx, `
 		SELECT chatwoot_message_id
 		  FROM chatwoot_message_to_matrix_event

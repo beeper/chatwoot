@@ -17,8 +17,20 @@ chatwoot_account_id: 123
 chatwoot_inbox_id: 123
 
 # ===== Database Settings =====
-# A PostgreSQL database connection string for the bot
-db_connection_string: postgresql://user:password@somewhere/chatwoot
+database:
+  # The database type. Only "pgx" is supported.
+  type: pgx
+  # The database URI.
+  #   Postgres: Connection string. For example, postgres://user:password@host/database?sslmode=disable
+  #             To connect via Unix socket, use something like postgres:///dbname?host=/var/run/postgresql
+  uri: postgresql://user:password@somewhere/chatwoot
+  # Maximum number of connections. Mostly relevant for Postgres.
+  max_open_conns: 20
+  max_idle_conns: 2
+  # Maximum connection idle time and lifetime before they're closed. Disabled if null.
+  # Parsed with https://pkg.go.dev/time#ParseDuration
+  max_conn_idle_time: null
+  max_conn_lifetime: null
 
 # ===== Bot Settings =====
 # Boolean indicating whether or not to create conversations for messages

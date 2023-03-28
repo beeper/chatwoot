@@ -18,45 +18,20 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/hlog"
 	"maunium.net/go/mautrix"
-	mcrypto "maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/crypto/attachment"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/format"
-	mid "maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/id"
 
 	"github.com/beeper/chatwoot/chatwootapi"
 )
 
-func SendMessage(ctx context.Context, roomId mid.RoomID, content event.MessageEventContent) (resp *mautrix.RespSendEvent, err error) {
+func SendMessage(ctx context.Context, roomId id.RoomID, content event.MessageEventContent) (resp *mautrix.RespSendEvent, err error) {
 	log := zerolog.Ctx(ctx).With().Str("room_id", roomId.String()).Logger()
 	ctx = log.WithContext(ctx)
 
 	r, err := DoRetry(ctx, "send message to "+roomId.String(), func(ctx context.Context) (*mautrix.RespSendEvent, error) {
-		if stateStore.IsEncrypted(roomId) {
-			log.Debug().Msg("Sending encrypted event")
-			encrypted, err := olmMachine.EncryptMegolmEvent(roomId, event.EventMessage, content)
-
-			// These three errors mean we have to make a new Megolm session
-			if err == mcrypto.SessionExpired || err == mcrypto.SessionNotShared || err == mcrypto.NoGroupSession {
-				err = olmMachine.ShareGroupSession(roomId, stateStore.GetRoomMembers(ctx, roomId))
-				if err != nil {
-					log.Err(err).Msg("failed to share group session")
-					return nil, err
-				}
-				encrypted, err = olmMachine.EncryptMegolmEvent(roomId, event.EventMessage, content)
-			}
-
-			if err != nil {
-				log.Err(err).Msg("failed to encrypt message")
-				return nil, err
-			}
-
-			encrypted.RelatesTo = content.RelatesTo // The m.relates_to field should be unencrypted, so copy it.
-			return client.SendMessageEvent(roomId, event.EventEncrypted, encrypted)
-		} else {
-			log.Debug().Msg("sending unencrypted event")
-			return client.SendMessageEvent(roomId, event.EventMessage, content)
-		}
+		return client.SendMessageEvent(roomId, event.EventMessage, content)
 	})
 	if err != nil {
 		// give up

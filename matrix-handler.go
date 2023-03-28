@@ -11,15 +11,16 @@ import (
 
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix"
-	mevent "maunium.net/go/mautrix/event"
-	mid "maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/sqlstatestore"
 
 	"github.com/beeper/chatwoot/chatwootapi"
 )
 
 var createRoomLock sync.Mutex = sync.Mutex{}
 
-func createChatwootConversation(ctx context.Context, roomID mid.RoomID, contactMxid mid.UserID, customAttrs map[string]string) (int, error) {
+func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMxid id.UserID, customAttrs map[string]string) (int, error) {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "create_chatwoot_conversation").
 		Str("room_id", roomID.String()).
@@ -63,8 +64,8 @@ func createChatwootConversation(ctx context.Context, roomID mid.RoomID, contactM
 
 	// Detect if this is the canonical DM
 	if configuration.CanonicalDMPrefix != "" {
-		var roomNameEvent mevent.RoomNameEventContent
-		err = client.StateEvent(roomID, mevent.StateRoomName, "", &roomNameEvent)
+		var roomNameEvent event.RoomNameEventContent
+		err = client.StateEvent(roomID, event.StateRoomName, "", &roomNameEvent)
 		if err == nil {
 			if strings.HasPrefix(roomNameEvent.Name, configuration.CanonicalDMPrefix) {
 				err = chatwootApi.AddConversationLabel(conversation.ID, []string{"canonical-dm"})
@@ -78,12 +79,12 @@ func createChatwootConversation(ctx context.Context, roomID mid.RoomID, contactM
 	return conversation.ID, nil
 }
 
-func GetCustomAttrForDevice(ctx context.Context, event *mevent.Event) (string, string) {
+func GetCustomAttrForDevice(ctx context.Context, evt *event.Event) (string, string) {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "get_custom_attr_for_device").
 		Logger()
 
-	clientType, exists := event.Content.Raw["com.beeper.origin_client_type"]
+	clientType, exists := evt.Content.Raw["com.beeper.origin_client_type"]
 	if !exists || clientType == nil {
 		log.Debug().Msg("No client type found")
 		return "", ""
@@ -97,7 +98,7 @@ func GetCustomAttrForDevice(ctx context.Context, event *mevent.Event) (string, s
 		return "", ""
 	}
 
-	clientVersion, exists := event.Content.Raw["com.beeper.origin_client_version"]
+	clientVersion, exists := evt.Content.Raw["com.beeper.origin_client_version"]
 	if !exists && clientVersion == nil {
 		log.Debug().Msg("No client version found")
 		return "", ""
@@ -119,21 +120,21 @@ func GetCustomAttrForDevice(ctx context.Context, event *mevent.Event) (string, s
 
 var deviceVersionRegex = regexp.MustCompile(`(\S+)( \(last updated at .*\))?`)
 
-func HandleBeeperClientInfo(ctx context.Context, event *mevent.Event) error {
+func HandleBeeperClientInfo(ctx context.Context, evt *event.Event) error {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "handle_beeper_client_info").
-		Str("room_id", event.RoomID.String()).
-		Str("event_id", event.ID.String()).
+		Str("room_id", evt.RoomID.String()).
+		Str("event_id", evt.ID.String()).
 		Logger()
 	ctx = log.WithContext(ctx)
 
-	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, event.RoomID)
+	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, evt.RoomID)
 	if err != nil {
 		return err
 	}
 	log = log.With().Int("conversation_id", conversationID).Logger()
 
-	deviceTypeKey, deviceVersion := GetCustomAttrForDevice(ctx, event)
+	deviceTypeKey, deviceVersion := GetCustomAttrForDevice(ctx, evt)
 	if deviceTypeKey != "" && deviceVersion != "" {
 		conv, err := chatwootApi.GetChatwootConversation(conversationID)
 		if err != nil {
@@ -174,33 +175,35 @@ func HandleBeeperClientInfo(ctx context.Context, event *mevent.Event) error {
 
 var rageshakeIssueRegex = regexp.MustCompile(`[A-Z]{1,5}-\d+`)
 
-func HandleMessage(ctx context.Context, _ mautrix.EventSource, event *mevent.Event) {
+func HandleMessage(ctx context.Context, _ mautrix.EventSource, evt *event.Event) {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "handle_message").
-		Str("room_id", event.RoomID.String()).
-		Str("event_id", event.ID.String()).
+		Str("room_id", evt.RoomID.String()).
+		Str("event_id", evt.ID.String()).
 		Logger()
 	ctx = log.WithContext(ctx)
 
 	// Acquire the lock, so that we don't have race conditions with the
 	// Chatwoot handler.
-	if _, found := roomSendlocks[event.RoomID]; !found {
+	if _, found := roomSendlocks[evt.RoomID]; !found {
 		log.Debug().Msg("creating send lock")
-		roomSendlocks[event.RoomID] = &sync.Mutex{}
+		roomSendlocks[evt.RoomID] = &sync.Mutex{}
 	}
-	roomSendlocks[event.RoomID].Lock()
+	roomSendlocks[evt.RoomID].Lock()
 	log.Debug().Msg("acquired send lock")
 	defer log.Debug().Msg("released send lock")
-	defer roomSendlocks[event.RoomID].Unlock()
+	defer roomSendlocks[evt.RoomID].Unlock()
 
-	if messageIDs, err := stateStore.GetChatwootMessageIdsForMatrixEventID(ctx, event.ID); err == nil && len(messageIDs) > 0 {
+	if messageIDs, err := stateStore.GetChatwootMessageIdsForMatrixEventID(ctx, evt.ID); err == nil && len(messageIDs) > 0 {
 		log.Info().Interface("message_ids", messageIDs).Msg("event already has chatwoot messages")
 		return
 	}
 
-	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, event.RoomID)
+	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, evt.RoomID)
 	if err != nil {
-		memberCount := len(stateStore.GetRoomMembers(ctx, event.RoomID))
+		joinedMembers := client.StateStore.(*sqlstatestore.SQLStateStore).GetRoomMembers(evt.RoomID, event.MembershipJoin)
+		memberCount := len(joinedMembers)
+
 		if configuration.BridgeIfMembersLessThan >= 0 && memberCount >= configuration.BridgeIfMembersLessThan {
 			log.Info().
 				Int("member_count", memberCount).
@@ -209,34 +212,36 @@ func HandleMessage(ctx context.Context, _ mautrix.EventSource, event *mevent.Eve
 			return
 		}
 
-		contactMxid := event.Sender
-		if configuration.Username == event.Sender.String() {
+		contactMxid := evt.Sender
+		if configuration.Username == evt.Sender.String() {
 			// This message came from the bot. Look for the other
 			// users in the room, and use them instead.
-			nonBotMembers := stateStore.GetNonBotRoomMembers(ctx, event.RoomID)
-			if len(nonBotMembers) != 1 {
+			delete(joinedMembers, evt.Sender)
+			if len(joinedMembers) != 1 {
 				log.Warn().Msg("not creating Chatwoot conversation for non-DM room")
 				return
 			}
-			contactMxid = nonBotMembers[0]
+			for k := range joinedMembers {
+				contactMxid = k
+			}
 		}
 
 		log.Warn().Err(err).Msg("no existing Chatwoot conversation found")
 		customAttrs := map[string]string{}
-		deviceTypeKey, deviceVersion := GetCustomAttrForDevice(ctx, event)
+		deviceTypeKey, deviceVersion := GetCustomAttrForDevice(ctx, evt)
 		if deviceTypeKey != "" && deviceVersion != "" {
 			customAttrs[deviceTypeKey] = deviceVersion
 		}
-		conversationID, err = createChatwootConversation(ctx, event.RoomID, contactMxid, customAttrs)
+		conversationID, err = createChatwootConversation(ctx, evt.RoomID, contactMxid, customAttrs)
 		if err != nil {
 			log.Err(err).Msg("failed to create Chatwoot conversation")
 			return
 		}
 	}
 
-	cm, err := DoRetry(ctx, fmt.Sprintf("handle matrix event %s in conversation %d", event.ID, conversationID), func(context.Context) (*[]*chatwootapi.Message, error) {
-		content := event.Content.AsMessage()
-		messages, err := HandleMatrixMessageContent(ctx, event, conversationID, content)
+	cm, err := DoRetry(ctx, fmt.Sprintf("handle matrix event %s in conversation %d", evt.ID, conversationID), func(context.Context) (*[]*chatwootapi.Message, error) {
+		content := evt.Content.AsMessage()
+		messages, err := HandleMatrixMessageContent(ctx, evt, conversationID, content)
 		return &messages, err
 	})
 	if err != nil {
@@ -249,10 +254,10 @@ func HandleMessage(ctx context.Context, _ mautrix.EventSource, event *mevent.Eve
 		return
 	}
 	for _, m := range *cm {
-		stateStore.SetChatwootMessageIdForMatrixEvent(ctx, event.ID, m.ID)
+		stateStore.SetChatwootMessageIdForMatrixEvent(ctx, evt.ID, m.ID)
 	}
-	content := event.Content.AsMessage()
-	if content.MsgType == mevent.MsgText || content.MsgType == mevent.MsgNotice {
+	content := evt.Content.AsMessage()
+	if content.MsgType == event.MsgText || content.MsgType == event.MsgNotice {
 		linearLinks := []string{}
 		for _, match := range rageshakeIssueRegex.FindAllString(content.Body, -1) {
 			linearLinks = append(linearLinks, fmt.Sprintf("https://linear.app/beeper/issue/%s", match))
@@ -263,50 +268,50 @@ func HandleMessage(ctx context.Context, _ mautrix.EventSource, event *mevent.Eve
 	}
 }
 
-func HandleReaction(ctx context.Context, _ mautrix.EventSource, event *mevent.Event) {
+func HandleReaction(ctx context.Context, _ mautrix.EventSource, evt *event.Event) {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "handle_reaction").
-		Str("room_id", event.RoomID.String()).
-		Str("event_id", event.ID.String()).
+		Str("room_id", evt.RoomID.String()).
+		Str("event_id", evt.ID.String()).
 		Logger()
 	ctx = log.WithContext(ctx)
 
 	// Acquire the lock, so that we don't have race conditions with the
 	// Chatwoot handler.
-	if _, found := roomSendlocks[event.RoomID]; !found {
+	if _, found := roomSendlocks[evt.RoomID]; !found {
 		log.Debug().Msg("creating send lock")
-		roomSendlocks[event.RoomID] = &sync.Mutex{}
+		roomSendlocks[evt.RoomID] = &sync.Mutex{}
 	}
-	roomSendlocks[event.RoomID].Lock()
+	roomSendlocks[evt.RoomID].Lock()
 	log.Debug().Msg("acquiring send lock")
 	defer log.Debug().Msg("released send lock")
-	defer roomSendlocks[event.RoomID].Unlock()
+	defer roomSendlocks[evt.RoomID].Unlock()
 
-	if messageIDs, err := stateStore.GetChatwootMessageIdsForMatrixEventID(ctx, event.ID); err == nil && len(messageIDs) > 0 {
+	if messageIDs, err := stateStore.GetChatwootMessageIdsForMatrixEventID(ctx, evt.ID); err == nil && len(messageIDs) > 0 {
 		log.Info().Interface("message_ids", messageIDs).Msg("event already has chatwoot messages")
 		return
 	}
 
-	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, event.RoomID)
+	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, evt.RoomID)
 	if err != nil {
 		log.Err(err).Msg("no existing Chatwoot conversation found")
 		return
 	}
 
 	cm, err := DoRetry(ctx, fmt.Sprintf("send notification of reaction to %d", conversationID), func(context.Context) (*chatwootapi.Message, error) {
-		reaction := event.Content.AsReaction()
-		reactedEvent, err := client.GetEvent(event.RoomID, reaction.RelatesTo.EventID)
+		reaction := evt.Content.AsReaction()
+		reactedEvent, err := client.GetEvent(evt.RoomID, reaction.RelatesTo.EventID)
 		if err != nil {
 			return nil, fmt.Errorf("couldn't find reacted to event %s: %w", reaction.RelatesTo.EventID, err)
 		}
 
-		if reactedEvent.Type == mevent.EventEncrypted {
+		if reactedEvent.Type == event.EventEncrypted {
 			err := reactedEvent.Content.ParseRaw(reactedEvent.Type)
 			if err != nil {
 				return nil, err
 			}
 
-			decryptedEvent, err := olmMachine.DecryptMegolmEvent(reactedEvent)
+			decryptedEvent, err := client.Crypto.Decrypt(reactedEvent)
 			if err != nil {
 				return nil, err
 			}
@@ -316,16 +321,16 @@ func HandleReaction(ctx context.Context, _ mautrix.EventSource, event *mevent.Ev
 		reactedMessage := reactedEvent.Content.AsMessage()
 		var reactedMessageText string
 		switch reactedMessage.MsgType {
-		case mevent.MsgText, mevent.MsgNotice, mevent.MsgAudio, mevent.MsgFile, mevent.MsgImage, mevent.MsgVideo:
+		case event.MsgText, event.MsgNotice, event.MsgAudio, event.MsgFile, event.MsgImage, event.MsgVideo:
 			reactedMessageText = reactedMessage.Body
-		case mevent.MsgEmote:
-			localpart, _, _ := event.Sender.Parse()
+		case event.MsgEmote:
+			localpart, _, _ := evt.Sender.Parse()
 			reactedMessageText = fmt.Sprintf(" \\* %s %s", localpart, reactedMessage.Body)
 		}
 		return chatwootApi.SendTextMessage(
 			ctx,
 			conversationID,
-			fmt.Sprintf("%s reacted with %s to \"%s\"", event.Sender, reaction.RelatesTo.Key, reactedMessageText),
+			fmt.Sprintf("%s reacted with %s to \"%s\"", evt.Sender, reaction.RelatesTo.Key, reactedMessageText),
 			chatwootapi.IncomingMessage)
 	})
 	if err != nil {
@@ -337,28 +342,28 @@ func HandleReaction(ctx context.Context, _ mautrix.EventSource, event *mevent.Ev
 		})
 		return
 	}
-	stateStore.SetChatwootMessageIdForMatrixEvent(ctx, event.ID, (*cm).ID)
+	stateStore.SetChatwootMessageIdForMatrixEvent(ctx, evt.ID, (*cm).ID)
 }
 
-func HandleMatrixMessageContent(ctx context.Context, event *mevent.Event, conversationID int, content *mevent.MessageEventContent) ([]*chatwootapi.Message, error) {
+func HandleMatrixMessageContent(ctx context.Context, evt *event.Event, conversationID int, content *event.MessageEventContent) ([]*chatwootapi.Message, error) {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "handle_matrix_message_content").
 		Int("conversation_id", conversationID).
-		Str("room_id", event.RoomID.String()).
-		Str("event_id", event.ID.String()).
+		Str("room_id", evt.RoomID.String()).
+		Str("event_id", evt.ID.String()).
 		Logger()
 	ctx = log.WithContext(ctx)
 
 	messageType := chatwootapi.IncomingMessage
-	if configuration.Username == event.Sender.String() {
+	if configuration.Username == evt.Sender.String() {
 		messageType = chatwootapi.OutgoingMessage
 	}
 
 	switch content.MsgType {
-	case mevent.MsgText, mevent.MsgNotice:
+	case event.MsgText, event.MsgNotice:
 		relatesTo := content.RelatesTo
 		body := content.Body
-		if relatesTo != nil && relatesTo.Type == mevent.RelReplace {
+		if relatesTo != nil && relatesTo.Type == event.RelReplace {
 			if strings.HasPrefix(body, " * ") {
 				body = " \\* " + body[3:]
 			}
@@ -366,13 +371,13 @@ func HandleMatrixMessageContent(ctx context.Context, event *mevent.Event, conver
 		cm, err := chatwootApi.SendTextMessage(ctx, conversationID, body, messageType)
 		return []*chatwootapi.Message{cm}, err
 
-	case mevent.MsgEmote:
-		localpart, _, _ := event.Sender.Parse()
+	case event.MsgEmote:
+		localpart, _, _ := evt.Sender.Parse()
 		cm, err := chatwootApi.SendTextMessage(ctx, conversationID, fmt.Sprintf(" \\* %s %s", localpart, content.Body), messageType)
 		return []*chatwootapi.Message{cm}, err
 
-	case mevent.MsgAudio, mevent.MsgFile, mevent.MsgImage, mevent.MsgVideo:
-		var file *mevent.EncryptedFileInfo
+	case event.MsgAudio, event.MsgFile, event.MsgImage, event.MsgVideo:
+		var file *event.EncryptedFileInfo
 		rawMXC := content.URL
 		if content.File != nil {
 			file = content.File
@@ -380,18 +385,18 @@ func HandleMatrixMessageContent(ctx context.Context, event *mevent.Event, conver
 		}
 		mxc, err := rawMXC.Parse()
 		if err != nil {
-			return nil, fmt.Errorf("malformed content URL in %s: %w", event.ID, err)
+			return nil, fmt.Errorf("malformed content URL in %s: %w", evt.ID, err)
 		}
 
 		data, err := client.DownloadBytes(mxc)
 		if err != nil {
-			return nil, fmt.Errorf("failed to download media in %s: %w", event.ID, err)
+			return nil, fmt.Errorf("failed to download media in %s: %w", evt.ID, err)
 		}
 
 		if file != nil {
 			err = file.DecryptInPlace(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to decrypt media in %s: %w", event.ID, err)
+				return nil, fmt.Errorf("failed to decrypt media in %s: %w", evt.ID, err)
 			}
 		}
 
@@ -420,32 +425,32 @@ func HandleMatrixMessageContent(ctx context.Context, event *mevent.Event, conver
 		return messages, err
 
 	default:
-		return nil, fmt.Errorf("unsupported message type %s in %s", content.MsgType, event.ID)
+		return nil, fmt.Errorf("unsupported message type %s in %s", content.MsgType, evt.ID)
 	}
 }
 
-func HandleRedaction(ctx context.Context, _ mautrix.EventSource, event *mevent.Event) {
+func HandleRedaction(ctx context.Context, _ mautrix.EventSource, evt *event.Event) {
 	log := zerolog.Ctx(ctx)
 	ctx = log.WithContext(ctx)
 
 	// Acquire the lock, so that we don't have race conditions with the
 	// Chatwoot handler.
-	if _, found := roomSendlocks[event.RoomID]; !found {
+	if _, found := roomSendlocks[evt.RoomID]; !found {
 		log.Debug().Msg("creating send lock")
-		roomSendlocks[event.RoomID] = &sync.Mutex{}
+		roomSendlocks[evt.RoomID] = &sync.Mutex{}
 	}
-	roomSendlocks[event.RoomID].Lock()
+	roomSendlocks[evt.RoomID].Lock()
 	log.Debug().Msg("acquired send lock")
 	defer log.Debug().Msg("released send lock")
-	defer roomSendlocks[event.RoomID].Unlock()
+	defer roomSendlocks[evt.RoomID].Unlock()
 
-	messageIDs, err := stateStore.GetChatwootMessageIdsForMatrixEventID(ctx, event.ID)
+	messageIDs, err := stateStore.GetChatwootMessageIdsForMatrixEventID(ctx, evt.ID)
 	if err != nil || len(messageIDs) == 0 {
-		log.Err(err).Str("redacts", event.Redacts.String()).Msg("no Chatwoot message for redacted event")
+		log.Err(err).Str("redacts", evt.Redacts.String()).Msg("no Chatwoot message for redacted event")
 		return
 	}
 
-	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, event.RoomID)
+	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, evt.RoomID)
 	if err != nil {
 		log.Err(err).Msg("no Chatwoot conversation associated with room")
 		return

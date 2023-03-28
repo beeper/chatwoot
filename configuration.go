@@ -6,6 +6,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/zeroconfig"
+	"maunium.net/go/mautrix/util/dbutil"
 )
 
 type Configuration struct {
@@ -21,7 +22,7 @@ type Configuration struct {
 	ChatwootInboxID         int    `yaml:"chatwoot_inbox_id"`
 
 	// Database settings
-	DBConnectionString string `yaml:"db_connection_string"`
+	Database dbutil.Config `yaml:"database"`
 
 	// Bot settings
 	AllowMessagesFromUsersOnOtherHomeservers bool   `yaml:"allow_messages_from_users_on_other_homeservers"`

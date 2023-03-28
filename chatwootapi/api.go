@@ -15,7 +15,7 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
-	mid "maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/id"
 )
 
 type MessageType int
@@ -76,7 +76,7 @@ func (api *ChatwootAPI) MakeUri(endpoint string) string {
 	return url.String()
 }
 
-func (api *ChatwootAPI) CreateContact(ctx context.Context, userID mid.UserID) (int, error) {
+func (api *ChatwootAPI) CreateContact(ctx context.Context, userID id.UserID) (int, error) {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "create_contact").
 		Str("user_id", userID.String()).
@@ -120,7 +120,7 @@ func (api *ChatwootAPI) CreateContact(ctx context.Context, userID mid.UserID) (i
 	return contactPayload.Payload.Contact.ID, nil
 }
 
-func (api *ChatwootAPI) ContactIDForMxid(userID mid.UserID) (int, error) {
+func (api *ChatwootAPI) ContactIDForMxid(userID id.UserID) (int, error) {
 	req, err := http.NewRequest(http.MethodGet, api.MakeUri("contacts/search"), nil)
 	if err != nil {
 		return 0, err

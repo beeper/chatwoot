@@ -1,14 +1,14 @@
-package store
+package database
 
 import (
 	"context"
 	"database/sql"
 
 	"github.com/rs/zerolog"
-	mid "maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/id"
 )
 
-func (store *StateStore) GetChatwootConversationIDFromMatrixRoom(ctx context.Context, roomID mid.RoomID) (int, error) {
+func (store *Database) GetChatwootConversationIDFromMatrixRoom(ctx context.Context, roomID id.RoomID) (int, error) {
 	row := store.DB.QueryRowContext(ctx, `
 		SELECT chatwoot_conversation_id
 		  FROM chatwoot_conversation_to_matrix_room
@@ -20,24 +20,24 @@ func (store *StateStore) GetChatwootConversationIDFromMatrixRoom(ctx context.Con
 	return chatwootConversationId, nil
 }
 
-func (store *StateStore) GetMatrixRoomFromChatwootConversation(ctx context.Context, conversationID int) (mid.RoomID, mid.EventID, error) {
+func (store *Database) GetMatrixRoomFromChatwootConversation(ctx context.Context, conversationID int) (id.RoomID, id.EventID, error) {
 	row := store.DB.QueryRowContext(ctx, `
 		SELECT matrix_room_id, most_recent_event_id
 		  FROM chatwoot_conversation_to_matrix_room
 		 WHERE chatwoot_conversation_id = $1`, conversationID)
-	var roomID mid.RoomID
+	var roomID id.RoomID
 	var mostRecentEventIdStr sql.NullString
 	if err := row.Scan(&roomID, &mostRecentEventIdStr); err != nil {
 		return "", "", err
 	}
 	if mostRecentEventIdStr.Valid {
-		return roomID, mid.EventID(mostRecentEventIdStr.String), nil
+		return roomID, id.EventID(mostRecentEventIdStr.String), nil
 	} else {
-		return roomID, mid.EventID(""), nil
+		return roomID, id.EventID(""), nil
 	}
 }
 
-func (store *StateStore) UpdateMostRecentEventIdForRoom(ctx context.Context, roomID mid.RoomID, mostRecentEventID mid.EventID) error {
+func (store *Database) UpdateMostRecentEventIdForRoom(ctx context.Context, roomID id.RoomID, mostRecentEventID id.EventID) error {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "update_most_recent_event_id_for_room").
 		Str("most_recent_event_id", mostRecentEventID.String()).
@@ -65,7 +65,7 @@ func (store *StateStore) UpdateMostRecentEventIdForRoom(ctx context.Context, roo
 	return tx.Commit()
 }
 
-func (store *StateStore) UpdateConversationIdForRoom(ctx context.Context, roomID mid.RoomID, conversationID int) error {
+func (store *Database) UpdateConversationIdForRoom(ctx context.Context, roomID id.RoomID, conversationID int) error {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "update_conversation_id_for_room").
 		Int("conversation_id", conversationID).
