@@ -2,14 +2,14 @@ package main
 
 import (
 	"bytes"
-	"errors"
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix"
 	mevent "maunium.net/go/mautrix/event"
 	mid "maunium.net/go/mautrix/id"
@@ -19,34 +19,44 @@ import (
 
 var createRoomLock sync.Mutex = sync.Mutex{}
 
-func createChatwootConversation(roomID mid.RoomID, contactMxid mid.UserID, customAttrs map[string]string) (int, error) {
-	log.Debug("Acquired create room lock")
+func createChatwootConversation(ctx context.Context, roomID mid.RoomID, contactMxid mid.UserID, customAttrs map[string]string) (int, error) {
+	log := zerolog.Ctx(ctx).With().
+		Str("component", "create_chatwoot_conversation").
+		Str("room_id", roomID.String()).
+		Str("contact_mxid", contactMxid.String()).
+		Interface("custom_attrs", customAttrs).
+		Logger()
+	ctx = log.WithContext(ctx)
+
+	log.Debug().Msg("Acquired create room lock")
 	createRoomLock.Lock()
-	defer log.Debug("Released create room lock")
+	defer log.Debug().Msg("Released create room lock")
 	defer createRoomLock.Unlock()
 
-	if conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(roomID); err == nil {
+	if conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, roomID); err == nil {
 		return conversationID, nil
 	}
 
 	contactID, err := chatwootApi.ContactIDForMxid(contactMxid)
 	if err != nil {
-		log.Errorf("Contact ID not found for user with MXID: %s. Error: %s", contactMxid, err)
+		log.Warn().Err(err).Msg("contact ID not found for user, will attempt to create one")
 
-		contactID, err = chatwootApi.CreateContact(contactMxid)
+		contactID, err = chatwootApi.CreateContact(ctx, contactMxid)
 		if err != nil {
-			return 0, errors.New(fmt.Sprintf("Create contact failed for %s: %s", contactMxid, err))
+			return 0, fmt.Errorf("create contact failed for %s: %w", contactMxid, err)
 		}
-		log.Infof("Contact with ID %d created", contactID)
+		log.Info().Int("contact_id", contactID).Msg("Contact created")
 	}
 
-	log.Infof("Creating conversation for room %s for contact %d", roomID, contactID)
+	log = log.With().Int("contact_id", contactID).Logger()
+
+	log.Info().Msg("creating Chatwoot conversation")
 	conversation, err := chatwootApi.CreateConversation(roomID.String(), contactID, customAttrs)
 	if err != nil {
-		return 0, errors.New(fmt.Sprintf("Failed to create chatwoot conversation for %s: %+v", roomID, err))
+		return 0, fmt.Errorf("failed to create chatwoot conversation for %s: %w", roomID, err)
 	}
 
-	err = stateStore.UpdateConversationIdForRoom(roomID, conversation.ID)
+	err = stateStore.UpdateConversationIdForRoom(ctx, roomID, conversation.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -59,7 +69,7 @@ func createChatwootConversation(roomID mid.RoomID, contactMxid mid.UserID, custo
 			if strings.HasPrefix(roomNameEvent.Name, configuration.CanonicalDMPrefix) {
 				err = chatwootApi.AddConversationLabel(conversation.ID, []string{"canonical-dm"})
 				if err != nil {
-					log.Error(err)
+					log.Err(err).Msg("failed to add canonical-dm label to conversation")
 				}
 			}
 		}
@@ -68,9 +78,14 @@ func createChatwootConversation(roomID mid.RoomID, contactMxid mid.UserID, custo
 	return conversation.ID, nil
 }
 
-func GetCustomAttrForDevice(event *mevent.Event) (string, string) {
+func GetCustomAttrForDevice(ctx context.Context, event *mevent.Event) (string, string) {
+	log := zerolog.Ctx(ctx).With().
+		Str("component", "get_custom_attr_for_device").
+		Logger()
+
 	clientType, exists := event.Content.Raw["com.beeper.origin_client_type"]
 	if !exists || clientType == nil {
+		log.Debug().Msg("No client type found")
 		return "", ""
 	}
 
@@ -78,37 +93,51 @@ func GetCustomAttrForDevice(event *mevent.Event) (string, string) {
 	if ct, ok := clientType.(string); ok {
 		clientTypeString = fmt.Sprintf("%s version", ct)
 	} else {
+		log.Warn().Msg("Client type is not a string")
 		return "", ""
 	}
 
 	clientVersion, exists := event.Content.Raw["com.beeper.origin_client_version"]
 	if !exists && clientVersion == nil {
+		log.Debug().Msg("No client version found")
 		return "", ""
 	}
 
 	if cv, ok := clientVersion.(string); ok {
 		clientVersionString = cv
 	} else {
+		log.Warn().Msg("Client version is not a string")
 		return "", ""
 	}
 
-	log.Debugf("Got client type '%s' and client version '%s'", clientTypeString, clientVersionString)
+	log.Debug().
+		Str("client_type", clientTypeString).
+		Str("client_version", clientVersionString).
+		Msg("got client type and version")
 	return clientTypeString, clientVersionString
 }
 
 var deviceVersionRegex = regexp.MustCompile(`(\S+)( \(last updated at .*\))?`)
 
-func HandleBeeperClientInfo(event *mevent.Event) error {
-	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(event.RoomID)
+func HandleBeeperClientInfo(ctx context.Context, event *mevent.Event) error {
+	log := zerolog.Ctx(ctx).With().
+		Str("component", "handle_beeper_client_info").
+		Str("room_id", event.RoomID.String()).
+		Str("event_id", event.ID.String()).
+		Logger()
+	ctx = log.WithContext(ctx)
+
+	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, event.RoomID)
 	if err != nil {
 		return err
 	}
+	log = log.With().Int("conversation_id", conversationID).Logger()
 
-	deviceTypeKey, deviceVersion := GetCustomAttrForDevice(event)
+	deviceTypeKey, deviceVersion := GetCustomAttrForDevice(ctx, event)
 	if deviceTypeKey != "" && deviceVersion != "" {
 		conv, err := chatwootApi.GetChatwootConversation(conversationID)
 		if err != nil {
-			log.Error("Failed to get Chatwoot conversation", err)
+			log.Err(err).Msg("failed to get Chatwoot conversation")
 			return err
 		}
 		customAttrs := conv.CustomAttributes
@@ -124,10 +153,17 @@ func HandleBeeperClientInfo(event *mevent.Event) error {
 			versionWithLastUpdated := fmt.Sprintf("%s (last updated at %s)", deviceVersion, now)
 			customAttrs[deviceTypeKey] = versionWithLastUpdated
 
-			log.Debugf("Setting custom attribute on the conversation %d / %s :: %s", conversationID, deviceTypeKey, versionWithLastUpdated)
+			log = log.With().
+				Str("device_type", deviceTypeKey).
+				Str("device_version", deviceVersion).
+				Str("last_updated", now).
+				Logger()
+
+			log.Debug().Msg("setting device custom attribute on conversation")
+
 			err := chatwootApi.SetConversationCustomAttributes(conversationID, customAttrs)
 			if err != nil {
-				log.Errorf("Failed to set custom attributes on the conversation %s -> %s: %v", deviceTypeKey, deviceVersion, customAttrs)
+				log.Err(err).Msg("failed to set device custom attribute on conversation")
 				return err
 			}
 		}
@@ -138,27 +174,38 @@ func HandleBeeperClientInfo(event *mevent.Event) error {
 
 var rageshakeIssueRegex = regexp.MustCompile(`[A-Z]{1,5}-\d+`)
 
-func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
+func HandleMessage(ctx context.Context, _ mautrix.EventSource, event *mevent.Event) {
+	log := zerolog.Ctx(ctx).With().
+		Str("component", "handle_message").
+		Str("room_id", event.RoomID.String()).
+		Str("event_id", event.ID.String()).
+		Logger()
+	ctx = log.WithContext(ctx)
+
 	// Acquire the lock, so that we don't have race conditions with the
 	// Chatwoot handler.
 	if _, found := roomSendlocks[event.RoomID]; !found {
-		log.Debugf("[message handler] creating send lock for %s", event.RoomID)
+		log.Debug().Msg("creating send lock")
 		roomSendlocks[event.RoomID] = &sync.Mutex{}
 	}
 	roomSendlocks[event.RoomID].Lock()
-	log.Debugf("[message handler] Acquired send lock for %s", event.RoomID)
-	defer log.Debugf("[message handler] Released send lock for %s", event.RoomID)
+	log.Debug().Msg("acquired send lock")
+	defer log.Debug().Msg("released send lock")
 	defer roomSendlocks[event.RoomID].Unlock()
 
-	if messageIDs, err := stateStore.GetChatwootMessageIdsForMatrixEventId(event.ID); err == nil && len(messageIDs) > 0 {
-		log.Info("Matrix Event ID ", event.ID, " already has a Chatwoot message(s) with ID(s) ", messageIDs)
+	if messageIDs, err := stateStore.GetChatwootMessageIdsForMatrixEventID(ctx, event.ID); err == nil && len(messageIDs) > 0 {
+		log.Info().Interface("message_ids", messageIDs).Msg("event already has chatwoot messages")
 		return
 	}
 
-	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(event.RoomID)
+	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, event.RoomID)
 	if err != nil {
-		if configuration.BridgeIfMembersLessThan >= 0 && len(stateStore.GetRoomMembers(event.RoomID)) >= configuration.BridgeIfMembersLessThan {
-			log.Warnf("Not creating Chatwoot conversation for %s because there are not less than %d members.", event.RoomID, configuration.BridgeIfMembersLessThan)
+		memberCount := len(stateStore.GetRoomMembers(ctx, event.RoomID))
+		if configuration.BridgeIfMembersLessThan >= 0 && memberCount >= configuration.BridgeIfMembersLessThan {
+			log.Info().
+				Int("member_count", memberCount).
+				Int("bridge_if_members_less_than", configuration.BridgeIfMembersLessThan).
+				Msg("not creating Chatwoot conversation for room with too many members")
 			return
 		}
 
@@ -166,42 +213,43 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 		if configuration.Username == event.Sender.String() {
 			// This message came from the bot. Look for the other
 			// users in the room, and use them instead.
-			nonBotMembers := stateStore.GetNonBotRoomMembers(event.RoomID)
+			nonBotMembers := stateStore.GetNonBotRoomMembers(ctx, event.RoomID)
 			if len(nonBotMembers) != 1 {
-				log.Warnf("Not creating Chatwoot conversation for %s", event.RoomID)
+				log.Warn().Msg("not creating Chatwoot conversation for non-DM room")
 				return
 			}
 			contactMxid = nonBotMembers[0]
 		}
 
-		log.Errorf("Chatwoot conversation not found for %s: %s", event.RoomID, err)
-		var customAttrs map[string]string
-		deviceTypeKey, deviceVersion := GetCustomAttrForDevice(event)
+		log.Warn().Err(err).Msg("no existing Chatwoot conversation found")
+		customAttrs := map[string]string{}
+		deviceTypeKey, deviceVersion := GetCustomAttrForDevice(ctx, event)
 		if deviceTypeKey != "" && deviceVersion != "" {
 			customAttrs[deviceTypeKey] = deviceVersion
 		}
-		conversationID, err = createChatwootConversation(event.RoomID, contactMxid, customAttrs)
+		conversationID, err = createChatwootConversation(ctx, event.RoomID, contactMxid, customAttrs)
 		if err != nil {
-			log.Errorf("Error creating chatwoot conversation: %+v", err)
+			log.Err(err).Msg("failed to create Chatwoot conversation")
 			return
 		}
 	}
 
-	cm, err := DoRetry(fmt.Sprintf("handle matrix event %s in conversation %d", event.ID, conversationID), func() (*[]*chatwootapi.Message, error) {
+	cm, err := DoRetry(ctx, fmt.Sprintf("handle matrix event %s in conversation %d", event.ID, conversationID), func(context.Context) (*[]*chatwootapi.Message, error) {
 		content := event.Content.AsMessage()
-		messages, err := HandleMatrixMessageContent(event, conversationID, content)
+		messages, err := HandleMatrixMessageContent(ctx, event, conversationID, content)
 		return &messages, err
 	})
 	if err != nil {
-		DoRetry(fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func() (*chatwootapi.Message, error) {
+		DoRetry(ctx, fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func(ctx context.Context) (*chatwootapi.Message, error) {
 			return chatwootApi.SendPrivateMessage(
+				ctx,
 				conversationID,
 				fmt.Sprintf("**Error occurred while receiving a Matrix message. You may have missed a message!**\n\nError: %+v", err))
 		})
 		return
 	}
 	for _, m := range *cm {
-		stateStore.SetChatwootMessageIdForMatrixEvent(event.ID, m.ID)
+		stateStore.SetChatwootMessageIdForMatrixEvent(ctx, event.ID, m.ID)
 	}
 	content := event.Content.AsMessage()
 	if content.MsgType == mevent.MsgText || content.MsgType == mevent.MsgNotice {
@@ -210,39 +258,46 @@ func HandleMessage(_ mautrix.EventSource, event *mevent.Event) {
 			linearLinks = append(linearLinks, fmt.Sprintf("https://linear.app/beeper/issue/%s", match))
 		}
 		if len(linearLinks) > 0 {
-			chatwootApi.SendPrivateMessage(conversationID, strings.Join(linearLinks, "\n\n"))
+			chatwootApi.SendPrivateMessage(ctx, conversationID, strings.Join(linearLinks, "\n\n"))
 		}
 	}
 }
 
-func HandleReaction(_ mautrix.EventSource, event *mevent.Event) {
+func HandleReaction(ctx context.Context, _ mautrix.EventSource, event *mevent.Event) {
+	log := zerolog.Ctx(ctx).With().
+		Str("component", "handle_reaction").
+		Str("room_id", event.RoomID.String()).
+		Str("event_id", event.ID.String()).
+		Logger()
+	ctx = log.WithContext(ctx)
+
 	// Acquire the lock, so that we don't have race conditions with the
 	// Chatwoot handler.
 	if _, found := roomSendlocks[event.RoomID]; !found {
-		log.Debugf("[reaction handler] creating send lock for %s", event.RoomID)
+		log.Debug().Msg("creating send lock")
 		roomSendlocks[event.RoomID] = &sync.Mutex{}
 	}
 	roomSendlocks[event.RoomID].Lock()
-	log.Debugf("[reaction handler] Acquired send lock for %s", event.RoomID)
-	defer log.Debugf("[reaction handler] Released send lock for %s", event.RoomID)
+	log.Debug().Msg("acquiring send lock")
+	defer log.Debug().Msg("released send lock")
 	defer roomSendlocks[event.RoomID].Unlock()
 
-	if messageIDs, err := stateStore.GetChatwootMessageIdsForMatrixEventId(event.ID); err == nil && len(messageIDs) > 0 {
-		log.Info("Matrix Event ID ", event.ID, " already has a Chatwoot message(s) with ID(s) ", messageIDs)
+	if messageIDs, err := stateStore.GetChatwootMessageIdsForMatrixEventID(ctx, event.ID); err == nil && len(messageIDs) > 0 {
+		log.Info().Interface("message_ids", messageIDs).Msg("event already has chatwoot messages")
 		return
 	}
 
-	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(event.RoomID)
+	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, event.RoomID)
 	if err != nil {
-		log.Errorf("Chatwoot conversation not found for %s: %+v", event.RoomID, err)
+		log.Err(err).Msg("no existing Chatwoot conversation found")
 		return
 	}
 
-	cm, err := DoRetry(fmt.Sprintf("send notification of reaction to %d", conversationID), func() (*chatwootapi.Message, error) {
+	cm, err := DoRetry(ctx, fmt.Sprintf("send notification of reaction to %d", conversationID), func(context.Context) (*chatwootapi.Message, error) {
 		reaction := event.Content.AsReaction()
 		reactedEvent, err := client.GetEvent(event.RoomID, reaction.RelatesTo.EventID)
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("Couldn't find reacted to event %s: %+v", reaction.RelatesTo.EventID, err))
+			return nil, fmt.Errorf("couldn't find reacted to event %s: %w", reaction.RelatesTo.EventID, err)
 		}
 
 		if reactedEvent.Type == mevent.EventEncrypted {
@@ -268,22 +323,32 @@ func HandleReaction(_ mautrix.EventSource, event *mevent.Event) {
 			reactedMessageText = fmt.Sprintf(" \\* %s %s", localpart, reactedMessage.Body)
 		}
 		return chatwootApi.SendTextMessage(
+			ctx,
 			conversationID,
 			fmt.Sprintf("%s reacted with %s to \"%s\"", event.Sender, reaction.RelatesTo.Key, reactedMessageText),
 			chatwootapi.IncomingMessage)
 	})
 	if err != nil {
-		DoRetry(fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func() (*chatwootapi.Message, error) {
+		DoRetry(ctx, fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func(ctx context.Context) (*chatwootapi.Message, error) {
 			return chatwootApi.SendPrivateMessage(
+				ctx,
 				conversationID,
 				fmt.Sprintf("**Error occurred while receiving a Matrix reaction. You may have missed a message reaction!**\n\nError: %+v", err))
 		})
 		return
 	}
-	stateStore.SetChatwootMessageIdForMatrixEvent(event.ID, (*cm).ID)
+	stateStore.SetChatwootMessageIdForMatrixEvent(ctx, event.ID, (*cm).ID)
 }
 
-func HandleMatrixMessageContent(event *mevent.Event, conversationID int, content *mevent.MessageEventContent) ([]*chatwootapi.Message, error) {
+func HandleMatrixMessageContent(ctx context.Context, event *mevent.Event, conversationID int, content *mevent.MessageEventContent) ([]*chatwootapi.Message, error) {
+	log := zerolog.Ctx(ctx).With().
+		Str("component", "handle_matrix_message_content").
+		Int("conversation_id", conversationID).
+		Str("room_id", event.RoomID.String()).
+		Str("event_id", event.ID.String()).
+		Logger()
+	ctx = log.WithContext(ctx)
+
 	messageType := chatwootapi.IncomingMessage
 	if configuration.Username == event.Sender.String() {
 		messageType = chatwootapi.OutgoingMessage
@@ -298,12 +363,12 @@ func HandleMatrixMessageContent(event *mevent.Event, conversationID int, content
 				body = " \\* " + body[3:]
 			}
 		}
-		cm, err := chatwootApi.SendTextMessage(conversationID, body, messageType)
+		cm, err := chatwootApi.SendTextMessage(ctx, conversationID, body, messageType)
 		return []*chatwootapi.Message{cm}, err
 
 	case mevent.MsgEmote:
 		localpart, _, _ := event.Sender.Parse()
-		cm, err := chatwootApi.SendTextMessage(conversationID, fmt.Sprintf(" \\* %s %s", localpart, content.Body), messageType)
+		cm, err := chatwootApi.SendTextMessage(ctx, conversationID, fmt.Sprintf(" \\* %s %s", localpart, content.Body), messageType)
 		return []*chatwootapi.Message{cm}, err
 
 	case mevent.MsgAudio, mevent.MsgFile, mevent.MsgImage, mevent.MsgVideo:
@@ -315,18 +380,18 @@ func HandleMatrixMessageContent(event *mevent.Event, conversationID int, content
 		}
 		mxc, err := rawMXC.Parse()
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("Malformed content URL in %s: %+v", event.ID, err))
+			return nil, fmt.Errorf("malformed content URL in %s: %w", event.ID, err)
 		}
 
 		data, err := client.DownloadBytes(mxc)
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("Failed to download media in %s: %+v", event.ID, err))
+			return nil, fmt.Errorf("failed to download media in %s: %w", event.ID, err)
 		}
 
 		if file != nil {
 			data, err = file.Decrypt(data)
 			if err != nil {
-				return nil, errors.New(fmt.Sprintf("Failed to decrypt media in %s: %+v", event.ID, err))
+				return nil, fmt.Errorf("failed to decrypt media in %s: %w", event.ID, err)
 			}
 		}
 
@@ -339,14 +404,14 @@ func HandleMatrixMessageContent(event *mevent.Event, conversationID int, content
 
 		cm, err := chatwootApi.SendAttachmentMessage(conversationID, filename, content.Info.MimeType, bytes.NewReader(data), messageType)
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("Failed to send attachment message. Error: %+v", err))
+			return nil, fmt.Errorf("failed to send attachment message. Error: %w", err)
 		}
 		messages := []*chatwootapi.Message{cm}
 
 		if caption != "" {
-			captionMessage, captionErr := chatwootApi.SendTextMessage(conversationID, fmt.Sprintf("Caption: %s", caption), messageType)
+			captionMessage, captionErr := chatwootApi.SendTextMessage(ctx, conversationID, fmt.Sprintf("Caption: %s", caption), messageType)
 			if captionErr != nil {
-				log.Errorf("Failed to send caption message. Error: %+v", captionErr)
+				log.Err(captionErr).Msg("failed to send caption message")
 			} else {
 				messages = append(messages, captionMessage)
 			}
@@ -355,38 +420,41 @@ func HandleMatrixMessageContent(event *mevent.Event, conversationID int, content
 		return messages, err
 
 	default:
-		return nil, errors.New(fmt.Sprintf("Unsupported message type %s in %s", content.MsgType, event.ID))
+		return nil, fmt.Errorf("unsupported message type %s in %s", content.MsgType, event.ID)
 	}
 }
 
-func HandleRedaction(_ mautrix.EventSource, event *mevent.Event) {
+func HandleRedaction(ctx context.Context, _ mautrix.EventSource, event *mevent.Event) {
+	log := zerolog.Ctx(ctx)
+	ctx = log.WithContext(ctx)
+
 	// Acquire the lock, so that we don't have race conditions with the
 	// Chatwoot handler.
 	if _, found := roomSendlocks[event.RoomID]; !found {
-		log.Debugf("[redaction handler] creating send lock for %s", event.RoomID)
+		log.Debug().Msg("creating send lock")
 		roomSendlocks[event.RoomID] = &sync.Mutex{}
 	}
 	roomSendlocks[event.RoomID].Lock()
-	log.Debugf("[redaction handler] Acquired send lock for %s", event.RoomID)
-	defer log.Debugf("[redaction handler] Released send lock for %s", event.RoomID)
+	log.Debug().Msg("acquired send lock")
+	defer log.Debug().Msg("released send lock")
 	defer roomSendlocks[event.RoomID].Unlock()
 
-	messageIDs, err := stateStore.GetChatwootMessageIdsForMatrixEventId(event.ID)
+	messageIDs, err := stateStore.GetChatwootMessageIdsForMatrixEventID(ctx, event.ID)
 	if err != nil || len(messageIDs) == 0 {
-		log.Info("[redaction handler] No Chatwoot message for Matrix event ", event.Redacts)
+		log.Err(err).Str("redacts", event.Redacts.String()).Msg("no Chatwoot message for redacted event")
 		return
 	}
 
-	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(event.RoomID)
+	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, event.RoomID)
 	if err != nil {
-		log.Warn("[redaction handler] No Chatwoot conversation associated with ", event.RoomID)
+		log.Err(err).Msg("no Chatwoot conversation associated with room")
 		return
 	}
 
 	for _, messageID := range messageIDs {
 		err = chatwootApi.DeleteMessage(conversationID, messageID)
 		if err != nil {
-			log.Infof("[redaction handler] Failed to delete Chatwoot message: %+v", err)
+			log.Err(err).Msg("failed to delete Chatwoot message")
 		}
 	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"flag"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"syscall"
 
 	_ "github.com/jackc/pgx/v4/stdlib"
+	"github.com/rs/zerolog"
 	globallog "github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v2"
 	"maunium.net/go/mautrix"
@@ -89,7 +91,7 @@ func main() {
 	case "postgres", "postgresql":
 		dbType = "pgx"
 		dbDialect = "postgres"
-		break
+
 	default:
 		log.Fatal().Str("scheme", dbUri.Scheme).Msg("Invalid database scheme")
 	}
@@ -133,7 +135,7 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Str("password_file", configuration.PasswordFile).Msg("Could not read password from ")
 	}
-	deviceID := FindDeviceID(db, username.String())
+	deviceID := FindDeviceID(context.TODO(), db, username.String())
 	if len(deviceID) > 0 {
 		log.Info().Str("device_id", string(deviceID)).Msg("Found existing device ID in database")
 	}
@@ -141,7 +143,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	_, err = DoRetry("login", func() (*mautrix.RespLogin, error) {
+	_, err = DoRetry(context.TODO(), "login", func(context.Context) (*mautrix.RespLogin, error) {
 		return client.Login(&mautrix.ReqLogin{
 			Type: mautrix.AuthTypePassword,
 			Identifier: mautrix.UserIdentifier{
@@ -198,18 +200,25 @@ func main() {
 	// keys and other such things.
 	syncer.OnSync(olmMachine.ProcessSyncResponse)
 
-	syncer.OnEventType(mevent.StateMember, func(_ mautrix.EventSource, event *mevent.Event) {
-		olmMachine.HandleMemberEvent(event)
-		stateStore.SetMembership(event)
-
-		log := log.With().
-			Str("component", "handle_member_event").
-			Str("room_id", event.RoomID.String()).
+	getLogger := func(event *mevent.Event) zerolog.Logger {
+		return log.With().
+			Str("event_type", event.Type.String()).
+			Str("sender", event.Sender.String()).
+			Str("room_id", string(event.RoomID)).
+			Str("event_id", string(event.ID)).
 			Logger()
+	}
+
+	syncer.OnEventType(mevent.StateMember, func(_ mautrix.EventSource, event *mevent.Event) {
+		log := getLogger(event)
+		ctx := log.WithContext(context.TODO())
+
+		olmMachine.HandleMemberEvent(event)
+		stateStore.SetMembership(ctx, event)
 
 		if event.GetStateKey() == username.String() && event.Content.AsMember().Membership == mevent.MembershipInvite {
 			log.Info().Msg("Joining")
-			_, err := DoRetry("join room", func() (*mautrix.RespJoinRoom, error) {
+			_, err := DoRetry(ctx, "join room", func(context.Context) (*mautrix.RespJoinRoom, error) {
 				return client.JoinRoomByID(event.RoomID)
 			})
 			if err != nil {
@@ -222,65 +231,76 @@ func main() {
 		}
 	})
 
-	syncer.OnEventType(mevent.StateEncryption, func(_ mautrix.EventSource, event *mevent.Event) { stateStore.SetEncryptionEvent(event) })
+	syncer.OnEventType(mevent.StateEncryption, func(_ mautrix.EventSource, event *mevent.Event) {
+		log := getLogger(event)
+		ctx := log.WithContext(context.TODO())
+		stateStore.SetEncryptionEvent(ctx, event)
+	})
 	syncer.OnEventType(mevent.EventMessage, func(source mautrix.EventSource, event *mevent.Event) {
-		stateStore.UpdateMostRecentEventIdForRoom(event.RoomID, event.ID)
+		log := getLogger(event)
+		ctx := log.WithContext(context.TODO())
+
+		stateStore.UpdateMostRecentEventIdForRoom(ctx, event.RoomID, event.ID)
 		if VerifyFromAuthorizedUser(event.Sender) {
-			go HandleBeeperClientInfo(event)
-			go HandleMessage(source, event)
+			go HandleBeeperClientInfo(ctx, event)
+			go HandleMessage(ctx, source, event)
 		}
 	})
 	syncer.OnEventType(mevent.EventReaction, func(source mautrix.EventSource, event *mevent.Event) {
-		stateStore.UpdateMostRecentEventIdForRoom(event.RoomID, event.ID)
+		log := getLogger(event)
+		ctx := log.WithContext(context.TODO())
+
+		stateStore.UpdateMostRecentEventIdForRoom(ctx, event.RoomID, event.ID)
 		if VerifyFromAuthorizedUser(event.Sender) {
-			go HandleBeeperClientInfo(event)
-			go HandleReaction(source, event)
+			go HandleBeeperClientInfo(ctx, event)
+			go HandleReaction(ctx, source, event)
 		}
 	})
 	syncer.OnEventType(mevent.EventRedaction, func(source mautrix.EventSource, event *mevent.Event) {
-		stateStore.UpdateMostRecentEventIdForRoom(event.RoomID, event.ID)
+		log := getLogger(event)
+		ctx := log.WithContext(context.TODO())
+
+		stateStore.UpdateMostRecentEventIdForRoom(ctx, event.RoomID, event.ID)
 		if VerifyFromAuthorizedUser(event.Sender) {
-			go HandleBeeperClientInfo(event)
-			go HandleRedaction(source, event)
+			go HandleBeeperClientInfo(ctx, event)
+			go HandleRedaction(ctx, source, event)
 		}
 	})
 	syncer.OnEventType(mevent.EventEncrypted, func(source mautrix.EventSource, event *mevent.Event) {
-		stateStore.UpdateMostRecentEventIdForRoom(event.RoomID, event.ID)
+		log := getLogger(event)
+		ctx := log.WithContext(context.TODO())
+
+		stateStore.UpdateMostRecentEventIdForRoom(ctx, event.RoomID, event.ID)
 		if !VerifyFromAuthorizedUser(event.Sender) {
 			return
 		}
-
-		log := log.With().
-			Str("component", "handle_encrypted_event").
-			Str("sender", event.Sender.String()).
-			Str("room_id", event.RoomID.String()).
-			Logger()
 
 		decryptedEvent, err := olmMachine.DecryptMegolmEvent(event)
 		if err != nil {
 			decryptErr := err
 			log.Error().Err(err).Msg("Failed to decrypt message")
-			conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(event.RoomID)
+			conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, event.RoomID)
 
 			if err != nil {
 				log.Warn().Msg("no Chatwoot conversation associated with this room")
 				return
 			}
 
-			DoRetry(fmt.Sprintf("send private error message to %d for %+v", conversationID, decryptErr), func() (*chatwootapi.Message, error) {
+			DoRetry(ctx, fmt.Sprintf("send private error message to %d for %+v", conversationID, decryptErr), func(ctx context.Context) (*chatwootapi.Message, error) {
 				return chatwootApi.SendPrivateMessage(
+					ctx,
 					conversationID,
 					fmt.Sprintf("**Failed to decrypt Matrix event (%s). You probably missed a message!**\n\nError: %+v", event.ID, decryptErr))
 			})
 		} else {
 			log.Debug().Msg("Received encrypted event")
-			go HandleBeeperClientInfo(event)
+			go HandleBeeperClientInfo(ctx, event)
 			if decryptedEvent.Type == mevent.EventMessage {
-				go HandleMessage(source, decryptedEvent)
+				go HandleMessage(ctx, source, decryptedEvent)
 			} else if decryptedEvent.Type == mevent.EventReaction {
-				go HandleReaction(source, decryptedEvent)
+				go HandleReaction(ctx, source, decryptedEvent)
 			} else if decryptedEvent.Type == mevent.EventRedaction {
-				go HandleRedaction(source, decryptedEvent)
+				go HandleRedaction(ctx, source, decryptedEvent)
 			}
 		}
 	})
@@ -312,6 +332,7 @@ func AllowKeyShare(device *mcrypto.DeviceIdentity, info mevent.RequestedKeyInfo)
 		Str("room_id", info.RoomID.String()).
 		Str("session_id", info.SessionID.String()).
 		Logger()
+	ctx := log.WithContext(context.TODO())
 
 	// Always allow key requests from @help
 	if device.UserID.String() == configuration.Username {
@@ -319,7 +340,7 @@ func AllowKeyShare(device *mcrypto.DeviceIdentity, info mevent.RequestedKeyInfo)
 		return nil
 	}
 
-	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(info.RoomID)
+	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, info.RoomID)
 	if err != nil {
 		log.Info().Msg("no Chatwoot conversation found")
 		return &mcrypto.KeyShareRejectNoResponse
@@ -328,7 +349,7 @@ func AllowKeyShare(device *mcrypto.DeviceIdentity, info mevent.RequestedKeyInfo)
 
 	conversation, err := chatwootApi.GetChatwootConversation(conversationID)
 	if err != nil {
-		log.Info().Msg("couldn't get Chatwoot conversation")
+		log.Info().Err(err).Msg("couldn't get Chatwoot conversation")
 		return &mcrypto.KeyShareRejectNoResponse
 	}
 	log = log.With().Int("sender_identifier", conversation.Meta.Sender.ID).Logger()
@@ -343,8 +364,8 @@ func AllowKeyShare(device *mcrypto.DeviceIdentity, info mevent.RequestedKeyInfo)
 	}
 }
 
-func FindDeviceID(db *dbutil.Database, accountID string) (deviceID mid.DeviceID) {
-	err := db.QueryRow("SELECT device_id FROM crypto_account WHERE account_id=$1", accountID).Scan(&deviceID)
+func FindDeviceID(ctx context.Context, db *dbutil.Database, accountID string) (deviceID mid.DeviceID) {
+	err := db.QueryRowContext(ctx, "SELECT device_id FROM crypto_account WHERE account_id=$1", accountID).Scan(&deviceID)
 	if err != nil && err != sql.ErrNoRows {
 		globallog.Warn().Err(err).Msg("failed to scan device ID")
 	}

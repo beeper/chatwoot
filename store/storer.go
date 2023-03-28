@@ -5,17 +5,19 @@
 package store
 
 import (
-	log "github.com/sirupsen/logrus"
+	"context"
+
+	"github.com/rs/zerolog/log"
 	"maunium.net/go/mautrix"
 	mid "maunium.net/go/mautrix/id"
 )
 
 func (store *StateStore) SaveFilterID(userID mid.UserID, filterID string) {
-	log.Debug("Upserting row into user_filter_ids")
+	log.Debug().Msg("Upserting row into user_filter_ids")
 	tx, err := store.DB.Begin()
 	if err != nil {
 		tx.Rollback()
-		log.Error(err)
+		log.Err(err).Msg("Failed to begin transaction")
 		return
 	}
 
@@ -26,7 +28,7 @@ func (store *StateStore) SaveFilterID(userID mid.UserID, filterID string) {
 	`
 	if _, err := tx.Exec(upsert, userID, filterID); err != nil {
 		tx.Rollback()
-		log.Error(err)
+		log.Err(err).Msg("Failed to upsert row into user_filter_ids")
 		return
 	}
 
@@ -43,7 +45,7 @@ func (store *StateStore) LoadFilterID(userID mid.UserID) string {
 }
 
 func (store *StateStore) SaveNextBatch(userID mid.UserID, nextBatchToken string) {
-	log.Debug("Upserting row into user_batch_tokens")
+	log.Debug().Msg("Upserting row into user_batch_tokens")
 	tx, err := store.DB.Begin()
 	if err != nil {
 		tx.Rollback()
@@ -57,7 +59,7 @@ func (store *StateStore) SaveNextBatch(userID mid.UserID, nextBatchToken string)
 	`
 	if _, err := tx.Exec(upsert, userID, nextBatchToken); err != nil {
 		tx.Rollback()
-		log.Error(err)
+		log.Err(err).Msg("Failed to upsert row into user_batch_tokens")
 		return
 	}
 
@@ -73,8 +75,8 @@ func (store *StateStore) LoadNextBatch(userID mid.UserID) string {
 	return batchToken
 }
 
-func (store *StateStore) GetRoomMembers(roomId mid.RoomID) []mid.UserID {
-	rows, err := store.DB.Query("SELECT user_id FROM room_members WHERE room_id = $1", roomId)
+func (store *StateStore) GetRoomMembers(ctx context.Context, roomId mid.RoomID) []mid.UserID {
+	rows, err := store.DB.QueryContext(ctx, "SELECT user_id FROM room_members WHERE room_id = $1", roomId)
 	users := make([]mid.UserID, 0)
 	if err != nil {
 		return users
@@ -90,8 +92,8 @@ func (store *StateStore) GetRoomMembers(roomId mid.RoomID) []mid.UserID {
 	return users
 }
 
-func (store *StateStore) GetNonBotRoomMembers(roomId mid.RoomID) []mid.UserID {
-	rows, err := store.DB.Query(`
+func (store *StateStore) GetNonBotRoomMembers(ctx context.Context, roomId mid.RoomID) []mid.UserID {
+	rows, err := store.DB.QueryContext(ctx, `
 		SELECT user_id
 		FROM room_members
 		WHERE room_id = $1

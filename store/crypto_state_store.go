@@ -5,10 +5,11 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	mevent "maunium.net/go/mautrix/event"
 	mid "maunium.net/go/mautrix/id"
 )
@@ -24,13 +25,18 @@ func (store *StateStore) GetEncryptionEvent(roomID mid.RoomID) *mevent.Encryptio
 	var encryptionEventJson []byte
 	if err := row.Scan(&encryptionEventJson); err != nil {
 		if err != sql.ErrNoRows {
-			log.Errorf("Couldn't to find encryption event JSON for %s: %s. Error: %s", roomID, encryptionEventJson, err)
+			log.Err(err).
+				Str("room_id", roomID.String()).
+				Msg("Couldn't to find encryption event JSON for room")
 		}
 		return nil
 	}
 	var encryptionEvent mevent.EncryptionEventContent
 	if err := json.Unmarshal(encryptionEventJson, &encryptionEvent); err != nil {
-		log.Errorf("Failed to unmarshal encryption event JSON: %s. Error: %s", encryptionEventJson, err)
+		log.Err(err).
+			Str("room_id", roomID.String()).
+			Str("encryption_event_json", string(encryptionEventJson)).
+			Msg("failed to unmarshal encryption event JSON")
 		return nil
 	}
 	return &encryptionEvent
@@ -53,8 +59,8 @@ func (store *StateStore) FindSharedRooms(userId mid.UserID) []mid.RoomID {
 	return rooms
 }
 
-func (store *StateStore) SetMembership(event *mevent.Event) {
-	log.Debugf("Updating room_members for %s", event.RoomID)
+func (store *StateStore) SetMembership(ctx context.Context, event *mevent.Event) {
+	log.Debug().Str("room_id", event.RoomID.String()).Msg("updating room_members for room")
 	tx, err := store.DB.Begin()
 	if err != nil {
 		tx.Rollback()
@@ -62,22 +68,31 @@ func (store *StateStore) SetMembership(event *mevent.Event) {
 	}
 	membershipEvent := event.Content.AsMember()
 	if membershipEvent.Membership.IsInviteOrJoin() {
-		insert := ""
-		insert = "INSERT INTO room_members (room_id, user_id) VALUES ($1, $2) ON CONFLICT (room_id, user_id) DO NOTHING"
-		if _, err := tx.Exec(insert, event.RoomID, event.GetStateKey()); err != nil {
-			log.Errorf("Failed to insert membership row for %s in %s: %+v", event.GetStateKey(), event.RoomID, err)
+		insert := "INSERT INTO room_members (room_id, user_id) VALUES ($1, $2) ON CONFLICT (room_id, user_id) DO NOTHING"
+		if _, err := tx.ExecContext(ctx, insert, event.RoomID, event.GetStateKey()); err != nil {
+			log.Err(err).
+				Str("user_id", event.GetStateKey()).
+				Str("room_id", event.RoomID.String()).
+				Msg("failed to insert membership row for user")
+			tx.Rollback()
+			return
 		}
 	} else {
 		del := "DELETE FROM room_members WHERE room_id = $1 AND user_id = $2"
-		if _, err := tx.Exec(del, event.RoomID, event.GetStateKey()); err != nil {
-			log.Errorf("Failed to delete membership row for %s in %s", event.GetStateKey(), event.RoomID)
+		if _, err := tx.ExecContext(ctx, del, event.RoomID, event.GetStateKey()); err != nil {
+			log.Err(err).
+				Str("user_id", event.GetStateKey()).
+				Str("room_id", event.RoomID.String()).
+				Msg("failed to delete membership row for user")
+			tx.Rollback()
+			return
 		}
 	}
 	tx.Commit()
 }
 
-func (store *StateStore) SetEncryptionEvent(event *mevent.Event) {
-	log.Debugf("Updating encryption_event for %s", event.RoomID)
+func (store *StateStore) SetEncryptionEvent(ctx context.Context, event *mevent.Event) {
+	log.Debug().Str("room_id", event.RoomID.String()).Msg("updating encryption_event for room")
 	tx, err := store.DB.Begin()
 	if err != nil {
 		tx.Rollback()
@@ -99,9 +114,9 @@ func (store *StateStore) SetEncryptionEvent(event *mevent.Event) {
 		ON CONFLICT (room_id) DO UPDATE
 			SET encryption_event = $2
 	`
-	if _, err := tx.Exec(upsert, event.RoomID, encryptionEventJson); err != nil {
+	if _, err := tx.ExecContext(ctx, upsert, event.RoomID, encryptionEventJson); err != nil {
 		tx.Rollback()
-		log.Error(err)
+		log.Err(err).Msg("failed to update encryption event for room")
 		return
 	}
 

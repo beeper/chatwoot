@@ -1,6 +1,8 @@
 package store
 
 import (
+	"context"
+
 	mid "maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/util/dbutil"
 )
@@ -16,6 +18,8 @@ func NewStateStore(db *dbutil.Database, dialect string, botUsername mid.UserID) 
 }
 
 func (store *StateStore) CreateTables() error {
+	ctx := context.TODO()
+
 	tx, err := store.DB.Begin()
 	if err != nil {
 		return err
@@ -72,7 +76,7 @@ func (store *StateStore) CreateTables() error {
 	}
 
 	for _, query := range queries {
-		if _, err := tx.Exec(query); err != nil {
+		if _, err := tx.ExecContext(ctx, query); err != nil {
 			_ = tx.Rollback()
 			return err
 		}

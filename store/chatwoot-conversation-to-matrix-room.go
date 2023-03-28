@@ -1,14 +1,15 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog"
 	mid "maunium.net/go/mautrix/id"
 )
 
-func (store *StateStore) GetChatwootConversationIDFromMatrixRoom(roomID mid.RoomID) (int, error) {
-	row := store.DB.QueryRow(`
+func (store *StateStore) GetChatwootConversationIDFromMatrixRoom(ctx context.Context, roomID mid.RoomID) (int, error) {
+	row := store.DB.QueryRowContext(ctx, `
 		SELECT chatwoot_conversation_id
 		  FROM chatwoot_conversation_to_matrix_room
 		 WHERE matrix_room_id = $1`, roomID)
@@ -19,8 +20,8 @@ func (store *StateStore) GetChatwootConversationIDFromMatrixRoom(roomID mid.Room
 	return chatwootConversationId, nil
 }
 
-func (store *StateStore) GetMatrixRoomFromChatwootConversation(conversationID int) (mid.RoomID, mid.EventID, error) {
-	row := store.DB.QueryRow(`
+func (store *StateStore) GetMatrixRoomFromChatwootConversation(ctx context.Context, conversationID int) (mid.RoomID, mid.EventID, error) {
+	row := store.DB.QueryRowContext(ctx, `
 		SELECT matrix_room_id, most_recent_event_id
 		  FROM chatwoot_conversation_to_matrix_room
 		 WHERE chatwoot_conversation_id = $1`, conversationID)
@@ -36,8 +37,14 @@ func (store *StateStore) GetMatrixRoomFromChatwootConversation(conversationID in
 	}
 }
 
-func (store *StateStore) UpdateMostRecentEventIdForRoom(roomID mid.RoomID, mostRecentEventID mid.EventID) error {
-	log.Debugf("Setting most recent event ID for %s to %s", roomID, mostRecentEventID)
+func (store *StateStore) UpdateMostRecentEventIdForRoom(ctx context.Context, roomID mid.RoomID, mostRecentEventID mid.EventID) error {
+	log := zerolog.Ctx(ctx).With().
+		Str("component", "update_most_recent_event_id_for_room").
+		Str("most_recent_event_id", mostRecentEventID.String()).
+		Logger()
+	ctx = log.WithContext(ctx)
+
+	log.Debug().Msg("setting most recent event ID for room")
 	tx, err := store.DB.Begin()
 	if err != nil {
 		tx.Rollback()
@@ -49,17 +56,23 @@ func (store *StateStore) UpdateMostRecentEventIdForRoom(roomID mid.RoomID, mostR
 		SET most_recent_event_id = $2
 		WHERE matrix_room_id = $1
 	`
-	if _, err := tx.Exec(update, roomID, mostRecentEventID); err != nil {
+	if _, err := tx.ExecContext(ctx, update, roomID, mostRecentEventID); err != nil {
 		tx.Rollback()
-		log.Error(err)
+		log.Err(err).Msg("failed to update most recent event ID")
 		return err
 	}
 
 	return tx.Commit()
 }
 
-func (store *StateStore) UpdateConversationIdForRoom(roomID mid.RoomID, conversationID int) error {
-	log.Debug("Upserting row into chatwoot_conversation_to_matrix_room")
+func (store *StateStore) UpdateConversationIdForRoom(ctx context.Context, roomID mid.RoomID, conversationID int) error {
+	log := zerolog.Ctx(ctx).With().
+		Str("component", "update_conversation_id_for_room").
+		Int("conversation_id", conversationID).
+		Logger()
+	ctx = log.WithContext(ctx)
+
+	log.Debug().Msg("setting conversation ID for room")
 	tx, err := store.DB.Begin()
 	if err != nil {
 		tx.Rollback()
@@ -72,7 +85,7 @@ func (store *StateStore) UpdateConversationIdForRoom(roomID mid.RoomID, conversa
 		ON CONFLICT (matrix_room_id) DO UPDATE
 			SET chatwoot_conversation_id = $2
 	`
-	if _, err := tx.Exec(upsert, roomID, conversationID); err != nil {
+	if _, err := tx.ExecContext(ctx, upsert, roomID, conversationID); err != nil {
 		tx.Rollback()
 		return err
 	}
