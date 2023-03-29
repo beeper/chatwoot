@@ -144,6 +144,7 @@ func main() {
 		Identifier: mautrix.UserIdentifier{Type: mautrix.IdentifierTypeUser, User: configuration.Username.String()},
 		Password:   password,
 	}
+	cryptoHelper.DBAccountID = configuration.Username.String()
 	cryptoHelper.DecryptErrorCallback = func(evt *event.Event, err error) {
 		log := getLogger(evt)
 		ctx := log.WithContext(context.TODO())
