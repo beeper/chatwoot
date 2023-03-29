@@ -223,6 +223,58 @@ func main() {
 		}
 	}()
 
+	// Make sure tha ttehre are conversations for all of the rooms that the bot
+	// is in.
+	go func() {
+		joined, err := client.JoinedRooms()
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to get joined rooms")
+		}
+
+		log := log.With().Str("component", "conversation_creation_backfill").Logger()
+		ctx := log.WithContext(context.Background())
+	joinedRoomsLoop:
+		for _, roomID := range joined.JoinedRooms {
+			_, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, roomID)
+			if err == nil {
+				// This room already has a Chatwoot conversation associtaed with it.
+				continue
+			}
+
+			log := log.With().Str("room_id", roomID.String()).Logger()
+
+			log.Info().Msg("Creating conversation for room")
+
+			messages, err := client.Messages(roomID, "", "", mautrix.DirectionBackward, nil, 50)
+			if err != nil {
+				log.Err(err).Msg("Failed to get messages for room")
+				continue
+			}
+
+			// Iterating through the messages will go in reverse order, so find
+			// the most recent message event and use that to create the
+			// conversation.
+			for _, evt := range messages.Chunk {
+				if evt.Type != event.EventMessage && evt.Type != event.EventEncrypted {
+					continue
+				}
+
+				chatwootConversationID, err := GetOrCreateChatwootConversation(ctx, roomID, evt)
+				if err != nil {
+					log.Err(err).Msg("failed to get or create Chatwoot conversation")
+					continue
+				}
+
+				log.Info().
+					Int("chatwoot_conversation_id", chatwootConversationID).
+					Msg("created Chatwoot conversation")
+				continue joinedRoomsLoop
+			}
+
+			log.Warn().Msg("No messages found for room suitable for creating conversation")
+		}
+	}()
+
 	// Listen to the webhook
 	http.HandleFunc("/", HandleWebhook)
 	http.HandleFunc("/webhook", HandleWebhook)
