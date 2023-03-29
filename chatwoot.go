@@ -148,7 +148,6 @@ func main() {
 		Identifier: mautrix.UserIdentifier{Type: mautrix.IdentifierTypeUser, User: username.String()},
 		Password:   password,
 	}
-	cryptoHelper.Machine().AllowKeyShare = AllowKeyShare
 	cryptoHelper.DecryptErrorCallback = func(evt *event.Event, err error) {
 		log := getLogger(evt)
 		ctx := log.WithContext(context.TODO())
@@ -178,6 +177,7 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize crypto helper")
 	}
+	cryptoHelper.Machine().AllowKeyShare = AllowKeyShare
 	client.Crypto = cryptoHelper
 
 	syncer := client.Syncer.(*mautrix.DefaultSyncer)
