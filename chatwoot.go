@@ -273,6 +273,8 @@ func main() {
 
 			log.Warn().Msg("No messages found for room suitable for creating conversation")
 		}
+
+		log.Info().Msg("finished creating conversations for rooms that don't have a conversation yet")
 	}()
 
 	// Listen to the webhook
