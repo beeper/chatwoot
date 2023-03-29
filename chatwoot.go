@@ -70,11 +70,7 @@ func main() {
 	}
 
 	log.Info().Interface("configuration", configuration).Msg("Config loaded")
-	username := id.UserID(configuration.Username)
-	_, botHomeserver, err = username.Parse()
-	if err != nil {
-		log.Fatal().Err(err).Msg("Couldn't parse username")
-	}
+	botHomeserver = configuration.Username.Homeserver()
 
 	log.Info().Msg("Chatwoot service starting...")
 
@@ -109,7 +105,7 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to upgrade the Chatwoot database")
 	}
 
-	client, err = mautrix.NewClient(botHomeserver, "", "")
+	client, err = mautrix.NewClient(configuration.Homeserver, "", "")
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create matrix client")
 	}
@@ -145,7 +141,7 @@ func main() {
 	}
 	cryptoHelper.LoginAs = &mautrix.ReqLogin{
 		Type:       mautrix.AuthTypePassword,
-		Identifier: mautrix.UserIdentifier{Type: mautrix.IdentifierTypeUser, User: username.String()},
+		Identifier: mautrix.UserIdentifier{Type: mautrix.IdentifierTypeUser, User: configuration.Username.String()},
 		Password:   password,
 	}
 	cryptoHelper.DecryptErrorCallback = func(evt *event.Event, err error) {
@@ -247,7 +243,7 @@ func AllowKeyShare(ctx context.Context, device *id.Device, info event.RequestedK
 	log := *zerolog.Ctx(ctx)
 
 	// Always allow key requests from @help
-	if device.UserID.String() == configuration.Username {
+	if device.UserID == configuration.Username {
 		log.Info().Msg("allowing key share because it's another login of the help account")
 		return nil
 	}

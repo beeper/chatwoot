@@ -6,14 +6,15 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/zeroconfig"
+	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/util/dbutil"
 )
 
 type Configuration struct {
 	// Authentication settings
-	Homeserver   string `yaml:"homeserver"`
-	Username     string `yaml:"username"`
-	PasswordFile string `yaml:"password_file"`
+	Homeserver   string    `yaml:"homeserver"`
+	Username     id.UserID `yaml:"username"`
+	PasswordFile string    `yaml:"password_file"`
 
 	// Chatwoot Authentication
 	ChatwootBaseUrl         string `yaml:"chatwoot_base_url"`

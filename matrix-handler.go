@@ -213,7 +213,7 @@ func HandleMessage(ctx context.Context, _ mautrix.EventSource, evt *event.Event)
 		}
 
 		contactMxid := evt.Sender
-		if configuration.Username == evt.Sender.String() {
+		if configuration.Username == evt.Sender {
 			// This message came from the bot. Look for the other
 			// users in the room, and use them instead.
 			delete(joinedMembers, evt.Sender)
@@ -355,7 +355,7 @@ func HandleMatrixMessageContent(ctx context.Context, evt *event.Event, conversat
 	ctx = log.WithContext(ctx)
 
 	messageType := chatwootapi.IncomingMessage
-	if configuration.Username == evt.Sender.String() {
+	if configuration.Username == evt.Sender {
 		messageType = chatwootapi.OutgoingMessage
 	}
 
