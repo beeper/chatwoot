@@ -48,7 +48,7 @@ func SendMessage(ctx context.Context, roomID id.RoomID, content *event.MessageEv
 
 func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	log := hlog.FromRequest(r)
-	ctx := r.Context()
+	ctx := log.WithContext(context.Background())
 
 	webhookBody, err := io.ReadAll(r.Body)
 	if err != nil {
