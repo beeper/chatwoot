@@ -243,12 +243,13 @@ func handleAttachment(ctx context.Context, roomID id.RoomID, chatwootAttachment 
 	file.URL = uploaded.ContentURI.CUString()
 
 	messageType := event.MsgFile
-	if strings.HasPrefix(mimeType, "image/") {
+	switch chatwootAttachment.FileType {
+	case "image":
 		messageType = event.MsgImage
-	} else if strings.HasPrefix(mimeType, "audio/") {
-		messageType = event.MsgAudio
-	} else if strings.HasPrefix(mimeType, "video/") {
+	case "video":
 		messageType = event.MsgVideo
+	case "audio":
+		messageType = event.MsgAudio
 	}
 
 	return SendMessage(ctx, roomID, event.MessageEventContent{
