@@ -27,6 +27,7 @@ func (store *Database) SetChatwootMessageIdForMatrixEvent(ctx context.Context, e
 			VALUES ($1, $2)
 	`
 	if _, err := tx.ExecContext(ctx, insert, eventID, chatwootMessageId); err != nil {
+		log.Err(err).Msg("failed to set chatwoot message ID for matrix event")
 		tx.Rollback()
 		return err
 	}
