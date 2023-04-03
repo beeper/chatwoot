@@ -245,7 +245,7 @@ func main() {
 
 				chatwootConversationID, err := GetOrCreateChatwootConversation(ctx, roomID, evt)
 				if err != nil {
-					log.Err(err).Msg("failed to get or create Chatwoot conversation")
+					log.Warn().Err(err).Msg("failed to get or create Chatwoot conversation")
 					continue
 				}
 
