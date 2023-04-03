@@ -80,23 +80,6 @@ func main() {
 		log.Fatal().Err(err).Msg("couldn't open database")
 	}
 
-	// Make sure to exit cleanly
-	c := make(chan os.Signal, 1)
-	signal.Notify(c,
-		syscall.SIGABRT,
-		syscall.SIGHUP,
-		syscall.SIGINT,
-		syscall.SIGQUIT,
-		syscall.SIGTERM,
-	)
-	go func() {
-		for range c { // when the process is killed
-			log.Info().Msg("Cleaning up")
-			db.RawDB.Close()
-			os.Exit(0)
-		}
-	}()
-
 	// Initialize the send lock map
 	roomSendlocks = map[id.RoomID]*sync.Mutex{}
 
@@ -275,6 +258,24 @@ func main() {
 		}
 
 		log.Info().Msg("finished creating conversations for rooms that don't have a conversation yet")
+	}()
+
+	// Make sure to exit cleanly
+	c := make(chan os.Signal, 1)
+	signal.Notify(c,
+		syscall.SIGABRT,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGQUIT,
+		syscall.SIGTERM,
+	)
+	go func() {
+		for range c { // when the process is killed
+			log.Info().Msg("Cleaning up")
+			cancelSync()
+			db.RawDB.Close()
+			os.Exit(0)
+		}
 	}()
 
 	// Listen to the webhook
