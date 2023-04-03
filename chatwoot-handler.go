@@ -135,12 +135,16 @@ func handleAttachment(ctx context.Context, roomID id.RoomID, chatwootAttachment 
 		return nil, err
 	}
 
+	if len(attachmentData) != chatwootAttachment.FileSize {
+		return nil, fmt.Errorf("downloaded attachment size (%d) does not match expected size (%d)", len(attachmentData), chatwootAttachment.FileSize)
+	}
+
 	// Construct the file info before encrypting the attachment.
 	mimeType := http.DetectContentType(attachmentData)
 	log.Info().Str("mime_type", mimeType).Msg("downloaded attachment")
 	info := &event.FileInfo{
 		MimeType: mimeType,
-		Size:     len(attachmentData),
+		Size:     chatwootAttachment.FileSize,
 	}
 
 	// Calculate the width and height of the image

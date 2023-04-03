@@ -32,6 +32,7 @@ type CreateContactPayload struct {
 type Attachment struct {
 	ID        int    `json:"id"`
 	FileType  string `json:"file_type"`
+	FileSize  int    `json:"file_size"`
 	AccountID int    `json:"account_id"`
 	DataURL   string `json:"data_url"`
 	ThumbURL  string `json:"thumb_url"`
