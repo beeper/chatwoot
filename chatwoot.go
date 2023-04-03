@@ -223,7 +223,7 @@ func main() {
 		}
 	}()
 
-	// Make sure tha ttehre are conversations for all of the rooms that the bot
+	// Make sure that there are conversations for all of the rooms that the bot
 	// is in.
 	go func() {
 		joined, err := client.JoinedRooms()
