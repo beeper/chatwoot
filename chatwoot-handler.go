@@ -126,7 +126,6 @@ func handleAttachment(ctx context.Context, roomID id.RoomID, chatwootAttachment 
 		Str("attachment_file_type", chatwootAttachment.FileType).
 		Logger()
 	ctx = log.WithContext(ctx)
-	log.Info().Msg("handling attachment")
 
 	// Download the attachment
 	attachmentData, err := DoRetryArr(ctx, fmt.Sprintf("Download attachment: %s", chatwootAttachment.DataURL), func(ctx context.Context) ([]byte, error) {
@@ -138,6 +137,7 @@ func handleAttachment(ctx context.Context, roomID id.RoomID, chatwootAttachment 
 
 	// Construct the file info before encrypting the attachment.
 	mimeType := http.DetectContentType(attachmentData)
+	log.Info().Str("mime_type", mimeType).Msg("downloaded attachment")
 	info := &event.FileInfo{
 		MimeType: mimeType,
 		Size:     len(attachmentData),
