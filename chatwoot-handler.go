@@ -11,7 +11,7 @@ import (
 	_ "image/png"
 	"io"
 	"net/http"
-	"regexp"
+	"net/url"
 	"strings"
 	"sync"
 
@@ -26,12 +26,12 @@ import (
 	"github.com/beeper/chatwoot/chatwootapi"
 )
 
-func SendMessage(ctx context.Context, roomId id.RoomID, content event.MessageEventContent) (resp *mautrix.RespSendEvent, err error) {
-	log := zerolog.Ctx(ctx).With().Str("room_id", roomId.String()).Logger()
+func SendMessage(ctx context.Context, roomID id.RoomID, content event.MessageEventContent) (resp *mautrix.RespSendEvent, err error) {
+	log := zerolog.Ctx(ctx).With().Str("room_id", roomID.String()).Logger()
 	ctx = log.WithContext(ctx)
 
-	r, err := DoRetry(ctx, "send message to "+roomId.String(), func(ctx context.Context) (*mautrix.RespSendEvent, error) {
-		return client.SendMessageEvent(roomId, event.EventMessage, content)
+	r, err := DoRetry(ctx, "send message to "+roomID.String(), func(ctx context.Context) (*mautrix.RespSendEvent, error) {
+		return client.SendMessageEvent(roomID, event.EventMessage, content)
 	})
 	if err != nil {
 		// give up
@@ -39,46 +39,6 @@ func SendMessage(ctx context.Context, roomId id.RoomID, content event.MessageEve
 		return nil, err
 	}
 	return r, err
-}
-
-func RetrieveAndUploadMediaToMatrix(ctx context.Context, url string) ([]byte, *event.EncryptedFileInfo, string, error) {
-	// Download the attachment
-	attachmentResp, err := DoRetry(ctx, fmt.Sprintf("Download attachment: %s", url), func(ctx context.Context) (*[]byte, error) {
-		return chatwootApi.DownloadAttachment(ctx, url)
-	})
-	if err != nil {
-		return []byte{}, nil, "", err
-	}
-	attachmentData := *attachmentResp
-
-	file := event.EncryptedFileInfo{
-		EncryptedFile: *attachment.NewEncryptedFile(),
-		URL:           "",
-	}
-	file.EncryptInPlace(attachmentData)
-
-	// Extract the filename from the data URL
-	re := regexp.MustCompile(`^(.*/)?(?:$|(.+?)(?:(\.[^.]*$)|$))`)
-	match := re.FindStringSubmatch(url)
-	filename := "unknown"
-	if match != nil {
-		filename = match[2]
-	}
-
-	resp, err := DoRetry(ctx, fmt.Sprintf("upload %s to Matrix", filename), func(context.Context) (*mautrix.RespMediaUpload, error) {
-		return client.UploadMedia(mautrix.ReqUploadMedia{
-			Content:       bytes.NewReader(attachmentData),
-			ContentLength: int64(len(attachmentData)),
-			ContentType:   "application/octet-stream",
-			FileName:      filename,
-		})
-	})
-	if err != nil {
-		return []byte{}, nil, "", err
-	}
-	file.URL = (*resp).ContentURI.CUString()
-
-	return attachmentData, &file, filename, nil
 }
 
 func HandleWebhook(w http.ResponseWriter, r *http.Request) {
@@ -157,6 +117,142 @@ func HandleConversationStatusChanged(ctx context.Context, csc chatwootapi.Conver
 		return fmt.Errorf("failed to send read receipt to %s for event %s: %w", roomID, mostRecentEventID, err)
 	}
 	return nil
+}
+
+func handleAttachment(ctx context.Context, roomID id.RoomID, chatwootAttachment chatwootapi.Attachment) (*mautrix.RespSendEvent, error) {
+	log := zerolog.Ctx(ctx).With().
+		Str("func", "handleAttachment").
+		Int("attachment_id", chatwootAttachment.ID).
+		Str("attachment_file_type", chatwootAttachment.FileType).
+		Logger()
+	ctx = log.WithContext(ctx)
+	log.Info().Msg("handling attachment")
+
+	// Download the attachment
+	attachmentData, err := DoRetryArr(ctx, fmt.Sprintf("Download attachment: %s", chatwootAttachment.DataURL), func(ctx context.Context) ([]byte, error) {
+		return chatwootApi.DownloadAttachment(ctx, chatwootAttachment.DataURL)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Construct the file info before encrypting the attachment.
+	mimeType := http.DetectContentType(attachmentData)
+	info := &event.FileInfo{
+		MimeType: mimeType,
+		Size:     len(attachmentData),
+	}
+
+	// Calculate the width and height of the image
+	if strings.HasPrefix(mimeType, "image/") {
+		image, _, err := image.Decode(bytes.NewReader(attachmentData))
+		if err != nil {
+			log.Warn().Err(err).Msg("failed to decode image")
+		} else {
+			bounds := image.Bounds()
+			info.Width = bounds.Dx()
+			info.Height = bounds.Dy()
+		}
+	}
+
+	// Handle the thumbnail if it exists.
+	if len(chatwootAttachment.ThumbURL) > 0 {
+		// Download the thumbnail
+		thumbnailData, err := DoRetryArr(ctx, fmt.Sprintf("Download attachment thumbnail: %s", chatwootAttachment.ThumbURL), func(ctx context.Context) ([]byte, error) {
+			return chatwootApi.DownloadAttachment(ctx, chatwootAttachment.ThumbURL)
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		// Calculate the info for the thumbnail
+		thumbnailMimeType := http.DetectContentType(thumbnailData)
+		info.ThumbnailInfo = &event.FileInfo{
+			MimeType: thumbnailMimeType,
+			Size:     len(thumbnailData),
+		}
+
+		thumbnailImage, _, err := image.Decode(bytes.NewReader(thumbnailData))
+		if err != nil {
+			log.Warn().Err(err).Msg("failed to decode image")
+		} else {
+			bounds := thumbnailImage.Bounds()
+			info.ThumbnailInfo.Width = bounds.Dx()
+			info.ThumbnailInfo.Height = bounds.Dy()
+		}
+
+		// Encrypt the thumbnail
+		info.ThumbnailFile = &event.EncryptedFileInfo{
+			EncryptedFile: *attachment.NewEncryptedFile(),
+			URL:           "",
+		}
+		info.ThumbnailFile.EncryptInPlace(thumbnailData)
+
+		// Upload the thumbnail
+		uploadedThumbnail, err := DoRetry(ctx, "upload thumbnail to Matrix", func(context.Context) (*mautrix.RespMediaUpload, error) {
+			return client.UploadMedia(mautrix.ReqUploadMedia{
+				ContentBytes:  thumbnailData,
+				ContentLength: int64(len(thumbnailData)),
+				ContentType:   "application/octet-stream",
+			})
+		})
+		if err != nil {
+			return nil, err
+		}
+		info.ThumbnailFile.URL = uploadedThumbnail.ContentURI.CUString()
+	}
+
+	// Encrypt the file
+	file := &event.EncryptedFileInfo{
+		EncryptedFile: *attachment.NewEncryptedFile(),
+		URL:           "",
+	}
+	file.EncryptInPlace(attachmentData)
+
+	// Extract the filename from the data URL. It should be the last part of
+	// the path before the query string.
+	filename := "unknown"
+	parsed, err := url.Parse(chatwootAttachment.DataURL)
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to parse attachment URL")
+	} else {
+		parts := strings.Split(parsed.Path, "/")
+		if len(parts) == 0 {
+			log.Warn().Err(err).Msg("failed to parse attachment URL")
+		} else {
+			filename = parts[len(parts)-1]
+		}
+	}
+
+	// Upload it to the media repo
+	uploaded, err := DoRetry(ctx, fmt.Sprintf("upload %s to Matrix", filename), func(context.Context) (*mautrix.RespMediaUpload, error) {
+		return client.UploadMedia(mautrix.ReqUploadMedia{
+			ContentBytes:  attachmentData,
+			ContentLength: int64(len(attachmentData)),
+			ContentType:   "application/octet-stream",
+			FileName:      filename,
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+	file.URL = uploaded.ContentURI.CUString()
+
+	messageType := event.MsgFile
+	if strings.HasPrefix(mimeType, "image/") {
+		messageType = event.MsgImage
+	} else if strings.HasPrefix(mimeType, "audio/") {
+		messageType = event.MsgAudio
+	} else if strings.HasPrefix(mimeType, "video/") {
+		messageType = event.MsgVideo
+	}
+
+	return SendMessage(ctx, roomID, event.MessageEventContent{
+		Body:    filename,
+		MsgType: messageType,
+		Info:    info,
+		File:    file,
+	})
 }
 
 func HandleMessageCreated(ctx context.Context, mc chatwootapi.MessageCreated) error {
@@ -243,62 +339,7 @@ func HandleMessageCreated(ctx context.Context, mc chatwootapi.MessageCreated) er
 	}
 
 	for _, a := range message.Attachments {
-		attachmentPlainData, file, filename, err := RetrieveAndUploadMediaToMatrix(ctx, a.DataURL)
-		if err != nil {
-			return err
-		}
-
-		// Figure out the type of the file, and if it's an image, determine it's width/height.
-		messageType := event.MsgFile
-		mtype := http.DetectContentType(attachmentPlainData)
-		fileInfo := event.FileInfo{
-			Size:     len(attachmentPlainData),
-			MimeType: mtype,
-		}
-		if strings.HasPrefix(mtype, "image/") {
-			m, _, err := image.Decode(bytes.NewReader(attachmentPlainData))
-			if err != nil {
-				log.Warn().Err(err).Msg("failed to decode image")
-			} else {
-				g := m.Bounds()
-				fileInfo.Width = g.Dx()
-				fileInfo.Height = g.Dy()
-			}
-			messageType = event.MsgImage
-		}
-		if strings.HasPrefix(mtype, "video/") {
-			messageType = event.MsgVideo
-		}
-
-		// Handle the thumbnail if it exists.
-		if len(a.ThumbURL) > 0 {
-			thumbnailPlainData, thumbnail, _, err := RetrieveAndUploadMediaToMatrix(ctx, a.ThumbURL)
-			if err == nil {
-				mtype := http.DetectContentType(thumbnailPlainData)
-				fileInfo.ThumbnailFile = thumbnail
-				fileInfo.ThumbnailInfo = &event.FileInfo{
-					Size:     len(thumbnailPlainData),
-					MimeType: mtype,
-				}
-				if strings.HasPrefix(mtype, "image/") {
-					m, _, err := image.Decode(bytes.NewReader(thumbnailPlainData))
-					if err != nil {
-						log.Warn().Err(err).Msg("failed to decode image")
-					} else {
-						g := m.Bounds()
-						fileInfo.ThumbnailInfo.Width = g.Dx()
-						fileInfo.ThumbnailInfo.Height = g.Dy()
-					}
-				}
-			}
-		}
-
-		resp, err = SendMessage(ctx, roomID, event.MessageEventContent{
-			Body:    filename,
-			MsgType: messageType,
-			Info:    &fileInfo,
-			File:    file,
-		})
+		resp, err = handleAttachment(ctx, roomID, a)
 		if err != nil {
 			return err
 		}

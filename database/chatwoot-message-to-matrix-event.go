@@ -60,8 +60,7 @@ func (store *Database) GetMatrixEventIdsForChatwootMessage(ctx context.Context, 
 }
 
 func (store *Database) GetChatwootMessageIdsForMatrixEventID(ctx context.Context, matrixEventID id.EventID) (messageIDs []int, err error) {
-	log := zerolog.Ctx(ctx).With().Str("event_id", matrixEventID.String()).Logger()
-	ctx = log.WithContext(ctx)
+	log := zerolog.Ctx(ctx)
 
 	log.Debug().Msg("getting chatwoot message IDs for matrix event ID")
 	var rows dbutil.Rows

@@ -363,7 +363,7 @@ func (api *ChatwootAPI) SendAttachmentMessage(conversationID int, filename strin
 	return &message, nil
 }
 
-func (api *ChatwootAPI) DownloadAttachment(ctx context.Context, url string) (*[]byte, error) {
+func (api *ChatwootAPI) DownloadAttachment(ctx context.Context, url string) ([]byte, error) {
 	log := zerolog.Ctx(ctx)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
@@ -384,7 +384,7 @@ func (api *ChatwootAPI) DownloadAttachment(ctx context.Context, url string) (*[]
 		log.Err(err).Msg("failed to read response body")
 		return nil, err
 	}
-	return &data, err
+	return data, err
 }
 
 func (api *ChatwootAPI) DeleteMessage(conversationID int, messageID int) error {

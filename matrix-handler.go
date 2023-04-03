@@ -205,10 +205,10 @@ func HandleMessage(ctx context.Context, _ mautrix.EventSource, evt *event.Event)
 		return
 	}
 
-	cm, err := DoRetry(ctx, fmt.Sprintf("handle matrix event %s in conversation %d", evt.ID, conversationID), func(context.Context) (*[]*chatwootapi.Message, error) {
+	cm, err := DoRetryArr(ctx, fmt.Sprintf("handle matrix event %s in conversation %d", evt.ID, conversationID), func(context.Context) ([]*chatwootapi.Message, error) {
 		content := evt.Content.AsMessage()
 		messages, err := HandleMatrixMessageContent(ctx, evt, conversationID, content)
-		return &messages, err
+		return messages, err
 	})
 	if err != nil {
 		DoRetry(ctx, fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func(ctx context.Context) (*chatwootapi.Message, error) {
@@ -219,7 +219,7 @@ func HandleMessage(ctx context.Context, _ mautrix.EventSource, evt *event.Event)
 		})
 		return
 	}
-	for _, m := range *cm {
+	for _, m := range cm {
 		stateStore.SetChatwootMessageIdForMatrixEvent(ctx, evt.ID, m.ID)
 	}
 	content := evt.Content.AsMessage()
@@ -438,7 +438,10 @@ func HandleMatrixMessageContent(ctx context.Context, evt *event.Event, conversat
 }
 
 func HandleRedaction(ctx context.Context, _ mautrix.EventSource, evt *event.Event) {
-	log := zerolog.Ctx(ctx)
+	log := zerolog.Ctx(ctx).With().
+		Str("room_id", evt.RoomID.String()).
+		Str("event_id", evt.ID.String()).
+		Logger()
 	ctx = log.WithContext(ctx)
 
 	// Acquire the lock, so that we don't have race conditions with the
