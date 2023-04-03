@@ -13,6 +13,7 @@ import (
 
 	_ "github.com/jackc/pgx/v4/stdlib"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/hlog"
 	globallog "github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v2"
 	"maunium.net/go/mautrix"
@@ -279,8 +280,9 @@ func main() {
 	}()
 
 	// Listen to the webhook
-	http.HandleFunc("/", HandleWebhook)
-	http.HandleFunc("/webhook", HandleWebhook)
+	handler := hlog.NewHandler(*log)(hlog.RequestIDHandler("request_id", "Request-ID")(http.HandlerFunc(HandleWebhook)))
+	http.Handle("/", handler)
+	http.Handle("/webhook", handler)
 	log.Info().Int("listen_port", configuration.ListenPort).Msg("starting webhook listener")
 	err = http.ListenAndServe(fmt.Sprintf(":%d", configuration.ListenPort), nil)
 	if err != nil {
