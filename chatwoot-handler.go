@@ -26,12 +26,17 @@ import (
 	"github.com/beeper/chatwoot/chatwootapi"
 )
 
-func SendMessage(ctx context.Context, roomID id.RoomID, content event.MessageEventContent) (resp *mautrix.RespSendEvent, err error) {
+func SendMessage(ctx context.Context, roomID id.RoomID, content *event.MessageEventContent, extraContent ...map[string]any) (resp *mautrix.RespSendEvent, err error) {
 	log := zerolog.Ctx(ctx).With().Str("room_id", roomID.String()).Logger()
 	ctx = log.WithContext(ctx)
 
+	wrappedContent := event.Content{Parsed: content}
+	if len(extraContent) == 1 {
+		wrappedContent.Raw = extraContent[0]
+	}
+
 	r, err := DoRetry(ctx, "send message to "+roomID.String(), func(ctx context.Context) (*mautrix.RespSendEvent, error) {
-		return client.SendMessageEvent(roomID, event.EventMessage, content)
+		return client.SendMessageEvent(roomID, event.EventMessage, &wrappedContent)
 	})
 	if err != nil {
 		// give up
@@ -119,7 +124,7 @@ func HandleConversationStatusChanged(ctx context.Context, csc chatwootapi.Conver
 	return nil
 }
 
-func handleAttachment(ctx context.Context, roomID id.RoomID, chatwootAttachment chatwootapi.Attachment) (*mautrix.RespSendEvent, error) {
+func handleAttachment(ctx context.Context, roomID id.RoomID, chatwootMessageID int, chatwootAttachment chatwootapi.Attachment) (*mautrix.RespSendEvent, error) {
 	log := zerolog.Ctx(ctx).With().
 		Str("func", "handleAttachment").
 		Int("attachment_id", chatwootAttachment.ID).
@@ -252,17 +257,21 @@ func handleAttachment(ctx context.Context, roomID id.RoomID, chatwootAttachment 
 		messageType = event.MsgAudio
 	}
 
-	return SendMessage(ctx, roomID, event.MessageEventContent{
+	return SendMessage(ctx, roomID, &event.MessageEventContent{
 		Body:    filename,
 		MsgType: messageType,
 		Info:    info,
 		File:    file,
+	}, map[string]any{
+		"com.beeper.chatwoot.message_id":    chatwootMessageID,
+		"com.beeper.chatwoot.attachment_id": chatwootAttachment.ID,
 	})
 }
 
 func HandleMessageCreated(ctx context.Context, mc chatwootapi.MessageCreated) error {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "handle_message_created").
+		Int("message_id", mc.ID).
 		Int("conversation_id", mc.Conversation.ID).Logger()
 	ctx = log.WithContext(ctx)
 
@@ -317,7 +326,7 @@ func HandleMessageCreated(ctx context.Context, mc chatwootapi.MessageCreated) er
 	// If there are already Matrix event IDs for this Chatwoot message,
 	// don't try and actually process the chatwoot message.
 	if len(eventIDs) > 0 {
-		log.Info().Int("message_id", mc.ID).
+		log.Info().
 			Interface("event_ids", eventIDs).
 			Msg("chatwoot message already has matrix event ID(s)")
 		return nil
@@ -336,7 +345,9 @@ func HandleMessageCreated(ctx context.Context, mc chatwootapi.MessageCreated) er
 		} else {
 			messageEventContent = event.MessageEventContent{MsgType: event.MsgText, Body: messageText}
 		}
-		resp, err = SendMessage(ctx, roomID, messageEventContent)
+		resp, err = SendMessage(ctx, roomID, &messageEventContent, map[string]any{
+			"com.beeper.chatwoot.message_id": mc.ID,
+		})
 		if err != nil {
 			return err
 		}
@@ -344,7 +355,7 @@ func HandleMessageCreated(ctx context.Context, mc chatwootapi.MessageCreated) er
 	}
 
 	for _, a := range message.Attachments {
-		resp, err = handleAttachment(ctx, roomID, a)
+		resp, err = handleAttachment(ctx, roomID, mc.ID, a)
 		if err != nil {
 			return err
 		}

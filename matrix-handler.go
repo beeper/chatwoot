@@ -194,7 +194,7 @@ func HandleMessage(ctx context.Context, _ mautrix.EventSource, evt *event.Event)
 	defer log.Debug().Msg("released send lock")
 	defer roomSendlocks[evt.RoomID].Unlock()
 
-	if messageIDs, err := stateStore.GetChatwootMessageIdsForMatrixEventID(ctx, evt.ID); err == nil && len(messageIDs) > 0 {
+	if messageIDs, err := stateStore.GetChatwootMessageIDsForMatrixEventID(ctx, evt.ID); err == nil && len(messageIDs) > 0 {
 		log.Info().Interface("message_ids", messageIDs).Msg("event already has chatwoot messages")
 		return
 	}
@@ -295,7 +295,7 @@ func HandleReaction(ctx context.Context, _ mautrix.EventSource, evt *event.Event
 	defer log.Debug().Msg("released send lock")
 	defer roomSendlocks[evt.RoomID].Unlock()
 
-	if messageIDs, err := stateStore.GetChatwootMessageIdsForMatrixEventID(ctx, evt.ID); err == nil && len(messageIDs) > 0 {
+	if messageIDs, err := stateStore.GetChatwootMessageIDsForMatrixEventID(ctx, evt.ID); err == nil && len(messageIDs) > 0 {
 		log.Info().Interface("message_ids", messageIDs).Msg("event already has chatwoot messages")
 		return
 	}
@@ -455,7 +455,7 @@ func HandleRedaction(ctx context.Context, _ mautrix.EventSource, evt *event.Even
 	defer log.Debug().Msg("released send lock")
 	defer roomSendlocks[evt.RoomID].Unlock()
 
-	messageIDs, err := stateStore.GetChatwootMessageIdsForMatrixEventID(ctx, evt.ID)
+	messageIDs, err := stateStore.GetChatwootMessageIDsForMatrixEventID(ctx, evt.ID)
 	if err != nil || len(messageIDs) == 0 {
 		log.Err(err).Str("redacts", evt.Redacts.String()).Msg("no Chatwoot message for redacted event")
 		return
