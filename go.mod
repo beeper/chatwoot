@@ -4,14 +4,14 @@ go 1.19
 
 require (
 	github.com/jackc/pgx/v4 v4.18.1
-	github.com/rs/xid v1.4.0
 	github.com/sethvargo/go-retry v0.2.4
 	go.mau.fi/zeroconfig v0.1.2
 	maunium.net/go/mautrix v0.15.1-0.20230328085008-b961896f2416
 )
 
 require (
-	github.com/coreos/go-systemd/v22 v22.3.3-0.20220203105225-a9a7ef127534 // indirect
+	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
+	github.com/rs/xid v1.4.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
 
@@ -25,7 +25,7 @@ require (
 	github.com/jackc/pgtype v1.14.0 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
-	github.com/rs/zerolog v1.29.0
+	github.com/rs/zerolog v1.29.1
 	github.com/tidwall/gjson v1.14.4 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
