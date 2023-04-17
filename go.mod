@@ -11,7 +11,7 @@ require (
 
 require (
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
-	github.com/rs/xid v1.4.0 // indirect
+	github.com/rs/xid v1.5.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
 
