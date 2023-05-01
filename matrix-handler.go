@@ -62,6 +62,13 @@ func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMx
 		return 0, err
 	}
 
+	_, err = client.SendStateEvent(roomID, chatwootConversationIDType, "", ChatwootConversationIDEventContent{
+		ConversationID: conversation.ID,
+	})
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to send conversation_id state event")
+	}
+
 	// Detect if this is the canonical DM
 	if configuration.CanonicalDMPrefix != "" {
 		var roomNameEvent event.RoomNameEventContent

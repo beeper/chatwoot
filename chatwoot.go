@@ -36,6 +36,15 @@ var botHomeserver string
 
 var roomSendlocks map[id.RoomID]*sync.Mutex
 
+var chatwootConversationIDType = event.Type{
+	Type:  "com.beeper.chatwoot.conversation_id",
+	Class: event.StateEventType,
+}
+
+type ChatwootConversationIDEventContent struct {
+	ConversationID int `json:"conversation_id"`
+}
+
 var VERSION = "0.2.1"
 
 func main() {
@@ -217,45 +226,27 @@ func main() {
 
 		log := log.With().Str("component", "conversation_creation_backfill").Logger()
 		ctx := log.WithContext(context.Background())
-	joinedRoomsLoop:
 		for _, roomID := range joined.JoinedRooms {
-			_, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, roomID)
-			if err == nil {
-				// This room already has a Chatwoot conversation associtaed with it.
-				continue
-			}
-
-			log := log.With().Str("room_id", roomID.String()).Logger()
-
-			log.Info().Msg("Creating conversation for room")
-
-			messages, err := client.Messages(roomID, "", "", mautrix.DirectionBackward, nil, 50)
+			chatwootConversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, roomID)
 			if err != nil {
-				log.Err(err).Msg("Failed to get messages for room")
-				continue
-			}
-
-			// Iterating through the messages will go in reverse order, so find
-			// the most recent message event and use that to create the
-			// conversation.
-			for _, evt := range messages.Chunk {
-				if evt.Type != event.EventMessage && evt.Type != event.EventEncrypted {
-					continue
-				}
-
-				chatwootConversationID, err := GetOrCreateChatwootConversation(ctx, roomID, evt)
+				// This room doesn't already has a Chatwoot conversation
+				// associtaed with it.
+				err = backfillConversationForRoom(ctx, roomID)
 				if err != nil {
-					log.Warn().Err(err).Msg("failed to get or create Chatwoot conversation")
+					log.Warn().Err(err).Msg("Failed to backfill conversation for room")
 					continue
 				}
-
-				log.Info().
-					Int("chatwoot_conversation_id", chatwootConversationID).
-					Msg("created Chatwoot conversation")
-				continue joinedRoomsLoop
+			} else {
+				// If we already have a Chatwoot conversation, make sure that
+				// the room has a state event with the Chatwoot conversation
+				// ID.
+				_, err = client.SendStateEvent(roomID, chatwootConversationIDType, "", ChatwootConversationIDEventContent{
+					ConversationID: chatwootConversationID,
+				})
+				if err != nil {
+					log.Warn().Err(err).Msg("Failed to send conversation_id state event")
+				}
 			}
-
-			log.Warn().Msg("No messages found for room suitable for creating conversation")
 		}
 
 		log.Info().Msg("finished creating conversations for rooms that don't have a conversation yet")
@@ -295,6 +286,40 @@ func main() {
 	if err != nil {
 		log.Error().Err(err).Msg("Error closing database")
 	}
+}
+
+func backfillConversationForRoom(ctx context.Context, roomID id.RoomID) error {
+	log := zerolog.Ctx(ctx).With().Str("room_id", roomID.String()).Logger()
+
+	log.Info().Msg("Creating conversation for room")
+
+	messages, err := client.Messages(roomID, "", "", mautrix.DirectionBackward, nil, 50)
+	if err != nil {
+		log.Err(err).Msg("Failed to get messages for room")
+		return err
+	}
+
+	// Iterating through the messages will go in reverse order, so find
+	// the most recent message event and use that to create the
+	// conversation.
+	for _, evt := range messages.Chunk {
+		if evt.Type != event.EventMessage && evt.Type != event.EventEncrypted {
+			continue
+		}
+
+		chatwootConversationID, err := GetOrCreateChatwootConversation(ctx, roomID, evt)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed to get or create Chatwoot conversation")
+			continue
+		}
+
+		log.Info().
+			Int("chatwoot_conversation_id", chatwootConversationID).
+			Msg("created Chatwoot conversation")
+		return nil
+	}
+
+	return fmt.Errorf("no messages found for room suitable for creating conversation")
 }
 
 func AllowKeyShare(ctx context.Context, device *id.Device, info event.RequestedKeyInfo) *crypto.KeyShareRejection {
