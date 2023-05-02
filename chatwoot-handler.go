@@ -75,7 +75,7 @@ func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			err = HandleConversationStatusChanged(ctx, csc)
 			if err != nil {
 				DoRetry(ctx, fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func(ctx context.Context) (*chatwootapi.Message, error) {
-					return chatwootApi.SendPrivateMessage(
+					return chatwootAPI.SendPrivateMessage(
 						ctx,
 						conversationID,
 						fmt.Sprintf("*Error occurred while handling Chatwoot conversation status changed.*\n\nError: %+v", err))
@@ -93,7 +93,7 @@ func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			err = HandleMessageCreated(ctx, mc)
 			if err != nil {
 				DoRetry(ctx, fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func(ctx context.Context) (*chatwootapi.Message, error) {
-					return chatwootApi.SendPrivateMessage(
+					return chatwootAPI.SendPrivateMessage(
 						ctx,
 						conversationID,
 						fmt.Sprintf("**Error occurred while handling Chatwoot message. The message may not have been sent to Matrix!**\n\nError: %+v", err))
@@ -134,7 +134,7 @@ func handleAttachment(ctx context.Context, roomID id.RoomID, chatwootMessageID i
 
 	// Download the attachment
 	attachmentData, err := DoRetryArr(ctx, fmt.Sprintf("Download attachment: %s", chatwootAttachment.DataURL), func(ctx context.Context) ([]byte, error) {
-		return chatwootApi.DownloadAttachment(ctx, chatwootAttachment.DataURL)
+		return chatwootAPI.DownloadAttachment(ctx, chatwootAttachment.DataURL)
 	})
 	if err != nil {
 		return nil, err
@@ -168,7 +168,7 @@ func handleAttachment(ctx context.Context, roomID id.RoomID, chatwootMessageID i
 	if len(chatwootAttachment.ThumbURL) > 0 {
 		// Download the thumbnail
 		thumbnailData, err := DoRetryArr(ctx, fmt.Sprintf("Download attachment thumbnail: %s", chatwootAttachment.ThumbURL), func(ctx context.Context) ([]byte, error) {
-			return chatwootApi.DownloadAttachment(ctx, chatwootAttachment.ThumbURL)
+			return chatwootAPI.DownloadAttachment(ctx, chatwootAttachment.ThumbURL)
 		})
 		if err != nil {
 			return nil, err

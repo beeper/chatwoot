@@ -74,6 +74,10 @@ type ConversationsPayload struct {
 	Payload []Conversation `json:"payload"`
 }
 
+type ConversationLabelsPayload struct {
+	Payload []string `json:"payload"`
+}
+
 // Content Attributes
 
 type ContentAttributes struct {

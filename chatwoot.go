@@ -31,7 +31,7 @@ var client *mautrix.Client
 var configuration Configuration
 var stateStore *database.Database
 
-var chatwootApi *chatwootapi.ChatwootAPI
+var chatwootAPI *chatwootapi.ChatwootAPI
 var botHomeserver string
 
 var roomSendlocks map[id.RoomID]*sync.Mutex
@@ -111,7 +111,7 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Str("access_token_file", configuration.ChatwootAccessTokenFile).Msg("Could not read access token")
 	}
-	chatwootApi = chatwootapi.CreateChatwootAPI(
+	chatwootAPI = chatwootapi.CreateChatwootAPI(
 		configuration.ChatwootBaseUrl,
 		configuration.ChatwootAccountID,
 		configuration.ChatwootInboxID,
@@ -159,7 +159,7 @@ func main() {
 		}
 
 		DoRetry(ctx, fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func(ctx context.Context) (*chatwootapi.Message, error) {
-			return chatwootApi.SendPrivateMessage(
+			return chatwootAPI.SendPrivateMessage(
 				ctx,
 				conversationID,
 				fmt.Sprintf("**Failed to decrypt Matrix event (%s). You probably missed a message!**\n\nError: %+v", evt.ID, err))
@@ -347,7 +347,7 @@ func AllowKeyShare(ctx context.Context, device *id.Device, info event.RequestedK
 	}
 	log = log.With().Int("conversation_id", conversationID).Logger()
 
-	conversation, err := chatwootApi.GetChatwootConversation(conversationID)
+	conversation, err := chatwootAPI.GetChatwootConversation(conversationID)
 	if err != nil {
 		log.Info().Err(err).Msg("couldn't get Chatwoot conversation")
 		return &crypto.KeyShareRejectNoResponse

@@ -195,10 +195,7 @@ func (api *ChatwootAPI) CreateConversation(sourceID string, contactID int, addit
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
-		content, err := io.ReadAll(resp.Body)
-		if err != nil {
-			content = []byte{}
-		}
+		content, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("POST conversations returned non-200 status code: %d: %s", resp.StatusCode, string(content))
 	}
 
@@ -211,7 +208,28 @@ func (api *ChatwootAPI) CreateConversation(sourceID string, contactID int, addit
 	return &conversation, nil
 }
 
-func (api *ChatwootAPI) AddConversationLabel(conversationID int, labels []string) error {
+func (api *ChatwootAPI) GetConversationLabels(conversationID int) ([]string, error) {
+	req, err := http.NewRequest(http.MethodGet, api.MakeUri(fmt.Sprintf("conversations/%d/labels", conversationID)), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := api.DoRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != 200 {
+		content, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("POST conversations returned non-200 status code: %d: %s", resp.StatusCode, string(content))
+	}
+
+	decoder := json.NewDecoder(resp.Body)
+	var labels ConversationLabelsPayload
+	err = decoder.Decode(&labels)
+	return labels.Payload, err
+}
+
+func (api *ChatwootAPI) SetConversationLabels(conversationID int, labels []string) error {
 	jsonValue, err := json.Marshal(map[string]any{"labels": labels})
 	if err != nil {
 		return err
@@ -226,10 +244,7 @@ func (api *ChatwootAPI) AddConversationLabel(conversationID int, labels []string
 		return err
 	}
 	if resp.StatusCode != 200 {
-		content, err := io.ReadAll(resp.Body)
-		if err != nil {
-			content = []byte{}
-		}
+		content, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("POST conversations returned non-200 status code: %d: %s", resp.StatusCode, string(content))
 	}
 	return nil
@@ -269,10 +284,7 @@ func (api *ChatwootAPI) doSendTextMessage(ctx context.Context, conversationID in
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
-		content, err := io.ReadAll(resp.Body)
-		if err != nil {
-			content = []byte{}
-		}
+		content, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("POST conversations/%d/messages returned non-200 status code: %d: %s", conversationID, resp.StatusCode, string(content))
 	}
 
@@ -347,10 +359,7 @@ func (api *ChatwootAPI) SendAttachmentMessage(conversationID int, filename strin
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
-		content, err := io.ReadAll(resp.Body)
-		if err != nil {
-			content = []byte{}
-		}
+		content, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("POST conversations/%d/messages returned non-200 status code: %d: %s", conversationID, resp.StatusCode, string(content))
 	}
 

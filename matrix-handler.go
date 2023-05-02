@@ -38,11 +38,11 @@ func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMx
 		return conversationID, nil
 	}
 
-	contactID, err := chatwootApi.ContactIDForMxid(contactMxid)
+	contactID, err := chatwootAPI.ContactIDForMxid(contactMxid)
 	if err != nil {
 		log.Warn().Err(err).Msg("contact ID not found for user, will attempt to create one")
 
-		contactID, err = chatwootApi.CreateContact(ctx, contactMxid)
+		contactID, err = chatwootAPI.CreateContact(ctx, contactMxid)
 		if err != nil {
 			return 0, fmt.Errorf("create contact failed for %s: %w", contactMxid, err)
 		}
@@ -52,10 +52,12 @@ func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMx
 	log = log.With().Int("contact_id", contactID).Logger()
 
 	log.Info().Msg("creating Chatwoot conversation")
-	conversation, err := chatwootApi.CreateConversation(roomID.String(), contactID, customAttrs)
+	conversation, err := chatwootAPI.CreateConversation(roomID.String(), contactID, customAttrs)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create chatwoot conversation for %s: %w", roomID, err)
 	}
+	log = log.With().Int("conversation_id", conversation.ID).Logger()
+	ctx = log.WithContext(ctx)
 
 	err = stateStore.UpdateConversationIdForRoom(ctx, roomID, conversation.ID)
 	if err != nil {
@@ -75,7 +77,14 @@ func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMx
 		err = client.StateEvent(roomID, event.StateRoomName, "", &roomNameEvent)
 		if err == nil {
 			if strings.HasPrefix(roomNameEvent.Name, configuration.CanonicalDMPrefix) {
-				err = chatwootApi.AddConversationLabel(conversation.ID, []string{"canonical-dm"})
+				labels, err := chatwootAPI.GetConversationLabels(conversation.ID)
+				if err != nil {
+					log.Err(err).Msg("Failed to list conversation labels")
+				}
+				labels = append(labels, "canonical-dm")
+
+				log.Info().Strs("labels", labels).Msg("Setting conversation labels")
+				err = chatwootAPI.SetConversationLabels(conversation.ID, labels)
 				if err != nil {
 					log.Err(err).Msg("failed to add canonical-dm label to conversation")
 				}
@@ -143,7 +152,7 @@ func HandleBeeperClientInfo(ctx context.Context, evt *event.Event) error {
 
 	deviceTypeKey, deviceVersion := GetCustomAttrForDevice(ctx, evt)
 	if deviceTypeKey != "" && deviceVersion != "" {
-		conv, err := chatwootApi.GetChatwootConversation(conversationID)
+		conv, err := chatwootAPI.GetChatwootConversation(conversationID)
 		if err != nil {
 			log.Err(err).Msg("failed to get Chatwoot conversation")
 			return err
@@ -169,7 +178,7 @@ func HandleBeeperClientInfo(ctx context.Context, evt *event.Event) error {
 
 			log.Debug().Msg("setting device custom attribute on conversation")
 
-			err := chatwootApi.SetConversationCustomAttributes(conversationID, customAttrs)
+			err := chatwootAPI.SetConversationCustomAttributes(conversationID, customAttrs)
 			if err != nil {
 				log.Err(err).Msg("failed to set device custom attribute on conversation")
 				return err
@@ -219,7 +228,7 @@ func HandleMessage(ctx context.Context, _ mautrix.EventSource, evt *event.Event)
 	})
 	if err != nil {
 		DoRetry(ctx, fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func(ctx context.Context) (*chatwootapi.Message, error) {
-			return chatwootApi.SendPrivateMessage(
+			return chatwootAPI.SendPrivateMessage(
 				ctx,
 				conversationID,
 				fmt.Sprintf("**Error occurred while receiving a Matrix message. You may have missed a message!**\n\nError: %+v", err))
@@ -236,7 +245,7 @@ func HandleMessage(ctx context.Context, _ mautrix.EventSource, evt *event.Event)
 			linearLinks = append(linearLinks, fmt.Sprintf("https://linear.app/beeper/issue/%s", match))
 		}
 		if len(linearLinks) > 0 {
-			chatwootApi.SendPrivateMessage(ctx, conversationID, strings.Join(linearLinks, "\n\n"))
+			chatwootAPI.SendPrivateMessage(ctx, conversationID, strings.Join(linearLinks, "\n\n"))
 		}
 	}
 }
@@ -342,7 +351,7 @@ func HandleReaction(ctx context.Context, _ mautrix.EventSource, evt *event.Event
 			localpart, _, _ := evt.Sender.Parse()
 			reactedMessageText = fmt.Sprintf(" \\* %s %s", localpart, reactedMessage.Body)
 		}
-		return chatwootApi.SendTextMessage(
+		return chatwootAPI.SendTextMessage(
 			ctx,
 			conversationID,
 			fmt.Sprintf("%s reacted with %s to \"%s\"", evt.Sender, reaction.RelatesTo.Key, reactedMessageText),
@@ -350,7 +359,7 @@ func HandleReaction(ctx context.Context, _ mautrix.EventSource, evt *event.Event
 	})
 	if err != nil {
 		DoRetry(ctx, fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func(ctx context.Context) (*chatwootapi.Message, error) {
-			return chatwootApi.SendPrivateMessage(
+			return chatwootAPI.SendPrivateMessage(
 				ctx,
 				conversationID,
 				fmt.Sprintf("**Error occurred while receiving a Matrix reaction. You may have missed a message reaction!**\n\nError: %+v", err))
@@ -383,12 +392,12 @@ func HandleMatrixMessageContent(ctx context.Context, evt *event.Event, conversat
 				body = " \\* " + body[3:]
 			}
 		}
-		cm, err := chatwootApi.SendTextMessage(ctx, conversationID, body, messageType)
+		cm, err := chatwootAPI.SendTextMessage(ctx, conversationID, body, messageType)
 		return []*chatwootapi.Message{cm}, err
 
 	case event.MsgEmote:
 		localpart, _, _ := evt.Sender.Parse()
-		cm, err := chatwootApi.SendTextMessage(ctx, conversationID, fmt.Sprintf(" \\* %s %s", localpart, content.Body), messageType)
+		cm, err := chatwootAPI.SendTextMessage(ctx, conversationID, fmt.Sprintf(" \\* %s %s", localpart, content.Body), messageType)
 		return []*chatwootapi.Message{cm}, err
 
 	case event.MsgAudio, event.MsgFile, event.MsgImage, event.MsgVideo:
@@ -422,14 +431,14 @@ func HandleMatrixMessageContent(ctx context.Context, evt *event.Event, conversat
 			caption = content.Body
 		}
 
-		cm, err := chatwootApi.SendAttachmentMessage(conversationID, filename, content.Info.MimeType, bytes.NewReader(data), messageType)
+		cm, err := chatwootAPI.SendAttachmentMessage(conversationID, filename, content.Info.MimeType, bytes.NewReader(data), messageType)
 		if err != nil {
 			return nil, fmt.Errorf("failed to send attachment message. Error: %w", err)
 		}
 		messages := []*chatwootapi.Message{cm}
 
 		if caption != "" {
-			captionMessage, captionErr := chatwootApi.SendTextMessage(ctx, conversationID, fmt.Sprintf("Caption: %s", caption), messageType)
+			captionMessage, captionErr := chatwootAPI.SendTextMessage(ctx, conversationID, fmt.Sprintf("Caption: %s", caption), messageType)
 			if captionErr != nil {
 				log.Err(captionErr).Msg("failed to send caption message")
 			} else {
@@ -475,7 +484,7 @@ func HandleRedaction(ctx context.Context, _ mautrix.EventSource, evt *event.Even
 	}
 
 	for _, messageID := range messageIDs {
-		err = chatwootApi.DeleteMessage(conversationID, messageID)
+		err = chatwootAPI.DeleteMessage(conversationID, messageID)
 		if err != nil {
 			log.Err(err).Msg("failed to delete Chatwoot message")
 		}
