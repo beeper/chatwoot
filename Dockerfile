@@ -14,7 +14,7 @@ ENV UID=1337 \
 RUN apk add --no-cache su-exec ca-certificates olm bash
 
 COPY --from=builder /usr/bin/chatwoot /usr/bin/chatwoot
-COPY --from=builder /build/config.sample.yaml /opt/chatwoot/config.sample.yaml
+COPY --from=builder /build/example-config.yaml /opt/chatwoot/example-config.yaml
 COPY --from=builder /build/docker-run.sh /docker-run.sh
 VOLUME /data
 

@@ -42,4 +42,4 @@ support the feature
 
 ## Configuration
 
-See `config.sample.yaml` for details about each config option.
+See `example-config.yaml` for details about each config option.

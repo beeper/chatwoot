@@ -8,7 +8,7 @@ RUN apk add --no-cache su-exec ca-certificates olm bash
 ARG EXECUTABLE=./chatwoot
 COPY $EXECUTABLE /usr/bin/chatwoot
 COPY ./docker-run.sh /docker-run.sh
-COPY ./config.sample.yaml /opt/chatwoot/config.sample.yaml
+COPY ./example-config.yaml /opt/chatwoot/example-config.yaml
 VOLUME /data
 
 CMD ["/docker-run.sh"]

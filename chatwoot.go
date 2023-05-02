@@ -66,6 +66,9 @@ func main() {
 		ListenPort:                               8080,
 		BridgeIfMembersLessThan:                  -1,
 		RenderMarkdown:                           false,
+		Backfill: BackfillConfiguration{
+			ChatwootConversations: true,
+		},
 	}
 
 	err = yaml.Unmarshal(configYaml, &configuration)
@@ -219,6 +222,10 @@ func main() {
 	// Make sure that there are conversations for all of the rooms that the bot
 	// is in.
 	go func() {
+		if !configuration.Backfill.ChatwootConversations && !configuration.Backfill.ConversationIDStateEvents {
+			return
+		}
+
 		joined, err := client.JoinedRooms()
 		if err != nil {
 			log.Fatal().Err(err).Msg("Failed to get joined rooms")
@@ -231,12 +238,14 @@ func main() {
 			if err != nil {
 				// This room doesn't already has a Chatwoot conversation
 				// associtaed with it.
-				err = backfillConversationForRoom(ctx, roomID)
-				if err != nil {
-					log.Warn().Err(err).Msg("Failed to backfill conversation for room")
-					continue
+				if configuration.Backfill.ChatwootConversations {
+					err = backfillConversationForRoom(ctx, roomID)
+					if err != nil {
+						log.Warn().Err(err).Msg("Failed to backfill conversation for room")
+						continue
+					}
 				}
-			} else {
+			} else if configuration.Backfill.ConversationIDStateEvents {
 				// If we already have a Chatwoot conversation, make sure that
 				// the room has a state event with the Chatwoot conversation
 				// ID.

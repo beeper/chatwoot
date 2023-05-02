@@ -10,6 +10,11 @@ import (
 	"maunium.net/go/mautrix/util/dbutil"
 )
 
+type BackfillConfiguration struct {
+	ChatwootConversations     bool `yaml:"chatwoot_conversations"`
+	ConversationIDStateEvents bool `yaml:"conversation_id_state_events"`
+}
+
 type Configuration struct {
 	// Authentication settings
 	Homeserver   string    `yaml:"homeserver"`
@@ -36,6 +41,9 @@ type Configuration struct {
 
 	// Logging configuration
 	Logging zeroconfig.Config `yaml:"logging"`
+
+	// Backfill configuration
+	Backfill BackfillConfiguration `yaml:"backfill"`
 }
 
 func (c *Configuration) GetPassword(log *zerolog.Logger) (string, error) {

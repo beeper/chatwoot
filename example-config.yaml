@@ -47,6 +47,17 @@ bridge_if_members_less_than: -1
 # HTML.
 render_markdown: false
 
+# ===== Backfill Settings =====
+# These backfills happen asynchronously on bot startup.
+backfill:
+  # Automatically create Chatwoot conversations for Matrix DM rooms that don't
+  # yet have a Chatwoot conversation.
+  chatwoot_conversations: true
+  # Send com.beeper.chatwoot.conversation_id state events to all rooms that
+  # have a corresponding Chatwoot conversation.
+  # This is O(n) in the number of Chatwoot conversations.
+  conversation_id_state_events: false
+
 # ===== Webhook Listener Settings =====
 # The port to listen for webhook events on. Defaults to 8080
 listen_port: 8080
