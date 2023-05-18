@@ -77,17 +77,25 @@ func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMx
 		err = client.StateEvent(roomID, event.StateRoomName, "", &roomNameEvent)
 		if err == nil {
 			if strings.HasPrefix(roomNameEvent.Name, configuration.CanonicalDMPrefix) {
-				labels, err := chatwootAPI.GetConversationLabels(conversation.ID)
-				if err != nil {
-					log.Err(err).Msg("Failed to list conversation labels")
-				}
-				labels = append(labels, "canonical-dm")
+				go func() {
+					// Wait 30 seconds so that the new-user automation works
+					// and we don't race when adding canonical-dm.
+					time.Sleep(30 * time.Second)
+					log.Info().Msg("Adding canonical-dm label to conversation")
 
-				log.Info().Strs("labels", labels).Msg("Setting conversation labels")
-				err = chatwootAPI.SetConversationLabels(conversation.ID, labels)
-				if err != nil {
-					log.Err(err).Msg("failed to add canonical-dm label to conversation")
-				}
+					labels, err := chatwootAPI.GetConversationLabels(conversation.ID)
+					if err != nil {
+						log.Err(err).Msg("Failed to list conversation labels")
+					}
+					log.Debug().Msg("Got current conversation labels")
+					labels = append(labels, "canonical-dm")
+
+					log.Info().Strs("labels", labels).Msg("Setting conversation labels")
+					err = chatwootAPI.SetConversationLabels(conversation.ID, labels)
+					if err != nil {
+						log.Err(err).Msg("failed to add canonical-dm label to conversation")
+					}
+				}()
 			}
 		}
 	}
