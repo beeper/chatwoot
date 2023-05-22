@@ -6,12 +6,13 @@ require (
 	github.com/jackc/pgx/v4 v4.18.1
 	github.com/sethvargo/go-retry v0.2.4
 	go.mau.fi/zeroconfig v0.1.2
-	maunium.net/go/mautrix v0.15.1-0.20230328085008-b961896f2416
+	maunium.net/go/mautrix v0.15.2
 )
 
 require (
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/rs/xid v1.5.0 // indirect
+	golang.org/x/exp v0.0.0-20230510235704-dd950f8aeaea // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
 
@@ -31,10 +32,10 @@ require (
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/yuin/goldmark v1.5.4 // indirect
-	golang.org/x/crypto v0.7.0 // indirect
-	golang.org/x/net v0.8.0 // indirect
-	golang.org/x/sys v0.6.0 // indirect
-	golang.org/x/text v0.8.0 // indirect
+	golang.org/x/crypto v0.9.0 // indirect
+	golang.org/x/net v0.10.0 // indirect
+	golang.org/x/sys v0.8.0 // indirect
+	golang.org/x/text v0.9.0 // indirect
 	gopkg.in/yaml.v2 v2.3.0
 	maunium.net/go/maulogger/v2 v2.4.1 // indirect
 )
