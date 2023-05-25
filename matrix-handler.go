@@ -236,10 +236,15 @@ func HandleMessage(ctx context.Context, _ mautrix.EventSource, evt *event.Event)
 	})
 	if err != nil {
 		DoRetry(ctx, fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func(ctx context.Context) (*chatwootapi.Message, error) {
-			return chatwootAPI.SendPrivateMessage(
+			msg, err := chatwootAPI.SendPrivateMessage(
 				ctx,
 				conversationID,
 				fmt.Sprintf("**Error occurred while receiving a Matrix message. You may have missed a message!**\n\nError: %+v", err))
+			if err != nil {
+				return nil, err
+			}
+			err = chatwootAPI.ToggleStatus(ctx, conversationID, chatwootapi.ConversationStatusOpen)
+			return msg, err
 		})
 		return
 	}
