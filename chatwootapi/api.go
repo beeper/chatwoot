@@ -18,22 +18,20 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-type MessageType int
+type MessageType string
 
 const (
-	IncomingMessage MessageType = iota
-	OutgoingMessage
+	IncomingMessage MessageType = "incoming"
+	OutgoingMessage MessageType = "outgoing"
 )
 
-func MessageTypeString(messageType MessageType) string {
-	switch messageType {
-	case IncomingMessage:
-		return "incoming"
-	case OutgoingMessage:
-		return "outgoing"
-	}
-	return ""
-}
+type ConversationStatus string
+
+const (
+	ConversationStatusOpen     ConversationStatus = "open"
+	ConversationStatusResolved ConversationStatus = "resolved"
+	ConversationStatusPending  ConversationStatus = "pending"
+)
 
 type ChatwootAPI struct {
 	BaseURL     string
@@ -271,7 +269,10 @@ func (api *ChatwootAPI) SetConversationCustomAttributes(conversationID int, cust
 
 func (api *ChatwootAPI) doSendTextMessage(ctx context.Context, conversationID int, jsonValues map[string]any) (*Message, error) {
 	log := zerolog.Ctx(ctx).With().Str("component", "send_text_message").Logger()
-	jsonValue, _ := json.Marshal(jsonValues)
+	jsonValue, err := json.Marshal(jsonValues)
+	if err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequest(http.MethodPost, api.MakeUri(fmt.Sprintf("conversations/%d/messages", conversationID)), bytes.NewBuffer(jsonValue))
 	if err != nil {
 		log.Err(err).Msg("Failed to create request")
@@ -295,12 +296,12 @@ func (api *ChatwootAPI) doSendTextMessage(ctx context.Context, conversationID in
 }
 
 func (api *ChatwootAPI) SendTextMessage(ctx context.Context, conversationID int, content string, messageType MessageType) (*Message, error) {
-	values := map[string]any{"content": content, "message_type": MessageTypeString(messageType), "private": false}
+	values := map[string]any{"content": content, "message_type": messageType, "private": false}
 	return api.doSendTextMessage(ctx, conversationID, values)
 }
 
 func (api *ChatwootAPI) SendPrivateMessage(ctx context.Context, conversationID int, content string) (*Message, error) {
-	values := map[string]any{"content": content, "message_type": MessageTypeString(OutgoingMessage), "private": true}
+	values := map[string]any{"content": content, "message_type": OutgoingMessage, "private": true}
 	return api.doSendTextMessage(ctx, conversationID, values)
 }
 
@@ -326,7 +327,7 @@ func (api *ChatwootAPI) SendAttachmentMessage(conversationID int, filename strin
 	if err != nil {
 		return nil, err
 	}
-	messageTypeFieldWriter.Write([]byte(MessageTypeString(messageType)))
+	messageTypeFieldWriter.Write([]byte(messageType))
 
 	h := make(textproto.MIMEHeader)
 	h.Set(
