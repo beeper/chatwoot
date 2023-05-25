@@ -305,6 +305,26 @@ func (api *ChatwootAPI) SendPrivateMessage(ctx context.Context, conversationID i
 	return api.doSendTextMessage(ctx, conversationID, values)
 }
 
+func (api *ChatwootAPI) ToggleStatus(ctx context.Context, conversationID int, status ConversationStatus) error {
+	jsonValue, err := json.Marshal(map[string]any{"status": status})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(http.MethodPost, api.MakeUri(fmt.Sprintf("conversations/%d/toggle_status", conversationID)), bytes.NewBuffer(jsonValue))
+	if err != nil {
+		return err
+	}
+	resp, err := api.DoRequest(req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != 200 {
+		content, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("POST conversations/%d/toggle_status returned non-200 status code: %d: %s", conversationID, resp.StatusCode, string(content))
+	}
+	return nil
+}
+
 var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
 
 func (api *ChatwootAPI) SendAttachmentMessage(conversationID int, filename string, mimeType string, fileData io.Reader, messageType MessageType) (*Message, error) {
