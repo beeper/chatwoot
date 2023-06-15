@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	_ "github.com/jackc/pgx/v4/stdlib"
 	"github.com/rs/zerolog"
@@ -221,44 +222,51 @@ func main() {
 
 	// Make sure that there are conversations for all of the rooms that the bot
 	// is in.
+	// This is run every 24 hours.
 	go func() {
 		if !configuration.Backfill.ChatwootConversations && !configuration.Backfill.ConversationIDStateEvents {
 			return
 		}
 
-		joined, err := client.JoinedRooms()
-		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to get joined rooms")
-		}
+		for {
+			log := log.With().Str("component", "conversation_creation_backfill").Logger()
+			ctx := log.WithContext(context.Background())
 
-		log := log.With().Str("component", "conversation_creation_backfill").Logger()
-		ctx := log.WithContext(context.Background())
-		for _, roomID := range joined.JoinedRooms {
-			chatwootConversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, roomID)
+			log.Info().Msg("starting to create conversations for rooms that don't have a conversation yet")
+
+			joined, err := client.JoinedRooms()
 			if err != nil {
-				// This room doesn't already has a Chatwoot conversation
-				// associtaed with it.
-				if configuration.Backfill.ChatwootConversations {
-					err = backfillConversationForRoom(ctx, roomID)
+				log.Fatal().Err(err).Msg("Failed to get joined rooms")
+			}
+
+			for _, roomID := range joined.JoinedRooms {
+				chatwootConversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, roomID)
+				if err != nil {
+					// This room doesn't already has a Chatwoot conversation
+					// associtaed with it.
+					if configuration.Backfill.ChatwootConversations {
+						err = backfillConversationForRoom(ctx, roomID)
+						if err != nil {
+							log.Warn().Err(err).Msg("Failed to backfill conversation for room")
+							continue
+						}
+					}
+				} else if configuration.Backfill.ConversationIDStateEvents {
+					// If we already have a Chatwoot conversation, make sure that
+					// the room has a state event with the Chatwoot conversation
+					// ID.
+					_, err = client.SendStateEvent(roomID, chatwootConversationIDType, "", ChatwootConversationIDEventContent{
+						ConversationID: chatwootConversationID,
+					})
 					if err != nil {
-						log.Warn().Err(err).Msg("Failed to backfill conversation for room")
-						continue
+						log.Warn().Err(err).Msg("Failed to send conversation_id state event")
 					}
 				}
-			} else if configuration.Backfill.ConversationIDStateEvents {
-				// If we already have a Chatwoot conversation, make sure that
-				// the room has a state event with the Chatwoot conversation
-				// ID.
-				_, err = client.SendStateEvent(roomID, chatwootConversationIDType, "", ChatwootConversationIDEventContent{
-					ConversationID: chatwootConversationID,
-				})
-				if err != nil {
-					log.Warn().Err(err).Msg("Failed to send conversation_id state event")
-				}
 			}
-		}
 
-		log.Info().Msg("finished creating conversations for rooms that don't have a conversation yet")
+			log.Info().Msg("finished creating conversations for rooms that don't have a conversation yet... waiting 24 hours to backfill again")
+			time.Sleep(24 * time.Hour)
+		}
 	}()
 
 	// Make sure to exit cleanly
