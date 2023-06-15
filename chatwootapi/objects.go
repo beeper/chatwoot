@@ -3,7 +3,6 @@ package chatwootapi
 // Contact
 type Contact struct {
 	ID         int    `json:"id"`
-	Email      string `json:"email"`
 	Identifier string `json:"identifier"`
 }
 
@@ -22,7 +21,6 @@ type ContactPayload struct {
 type CreateContactPayload struct {
 	InboxID     int    `json:"inbox_id"`
 	Name        string `json:"name"`
-	Email       string `json:"email"`
 	PhoneNumber string `json:"phone_number"`
 	Identifier  string `json:"identifier"`
 }

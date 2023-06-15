@@ -84,7 +84,6 @@ func (api *ChatwootAPI) CreateContact(ctx context.Context, userID id.UserID) (in
 	payload := CreateContactPayload{
 		InboxID:    api.InboxID,
 		Name:       userID.String(),
-		Email:      userID.String(),
 		Identifier: userID.String(),
 	}
 	jsonValue, _ := json.Marshal(payload)
