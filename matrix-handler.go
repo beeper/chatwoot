@@ -444,7 +444,12 @@ func HandleMatrixMessageContent(ctx context.Context, evt *event.Event, conversat
 			caption = content.Body
 		}
 
-		cm, err := chatwootAPI.SendAttachmentMessage(conversationID, filename, content.Info.MimeType, bytes.NewReader(data), messageType)
+		mimeType := "application/octet-stream"
+		if content.Info != nil {
+			mimeType = content.Info.MimeType
+		}
+
+		cm, err := chatwootAPI.SendAttachmentMessage(conversationID, filename, mimeType, bytes.NewReader(data), messageType)
 		if err != nil {
 			return nil, fmt.Errorf("failed to send attachment message. Error: %w", err)
 		}
