@@ -362,13 +362,5 @@ func HandleMessageCreated(ctx context.Context, mc chatwootapi.MessageCreated) er
 		stateStore.SetChatwootMessageIdForMatrixEvent(ctx, resp.EventID, mc.ID)
 	}
 
-	_, err = DoRetry(ctx, fmt.Sprintf("send read receipt to %s for event %s", roomID, resp.EventID), func(context.Context) (*any, error) {
-		return nil, client.MarkRead(roomID, resp.EventID)
-	})
-	if err != nil {
-		log.Err(err).
-			Str("event_id", resp.EventID.String()).
-			Msg("failed to send read receipt")
-	}
 	return nil
 }
