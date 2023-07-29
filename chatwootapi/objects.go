@@ -94,8 +94,3 @@ type MessageCreated struct {
 	Private           bool               `json:"private"`
 	Conversation      Conversation       `json:"conversation"`
 }
-
-type ConversationStatusChanged struct {
-	ID     int    `json:"id"`
-	Status string `json:"status"`
-}

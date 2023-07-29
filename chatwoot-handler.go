@@ -64,24 +64,6 @@ func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	if eventType, found := eventJson["event"]; found {
 		switch eventType {
-		case "conversation_status_changed":
-			var csc chatwootapi.ConversationStatusChanged
-			err := json.Unmarshal(webhookBody, &csc)
-			if err != nil {
-				log.Err(err).Msg("error decoding message created webhook body")
-				break
-			}
-			conversationID := csc.ID
-			err = HandleConversationStatusChanged(ctx, csc)
-			if err != nil {
-				DoRetry(ctx, fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func(ctx context.Context) (*chatwootapi.Message, error) {
-					return chatwootAPI.SendPrivateMessage(
-						ctx,
-						conversationID,
-						fmt.Sprintf("*Error occurred while handling Chatwoot conversation status changed.*\n\nError: %+v", err))
-				})
-			}
-
 		case "message_created", "message_updated":
 			var mc chatwootapi.MessageCreated
 			err = json.Unmarshal(webhookBody, &mc)
@@ -101,27 +83,6 @@ func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-}
-
-func HandleConversationStatusChanged(ctx context.Context, csc chatwootapi.ConversationStatusChanged) error {
-	if csc.Status != "open" {
-		// it's backwards, this means that the conversation was re-opened
-		return nil
-	}
-
-	roomID, mostRecentEventID, err := stateStore.GetMatrixRoomFromChatwootConversation(ctx, csc.ID)
-	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Int("conversation_id", csc.ID).Msg("no room found for conversation")
-		return err
-	}
-
-	_, err = DoRetry(ctx, fmt.Sprintf("send read receipt to %s for event %s", roomID, mostRecentEventID), func(context.Context) (*any, error) {
-		return nil, client.MarkRead(roomID, mostRecentEventID)
-	})
-	if err != nil {
-		return fmt.Errorf("failed to send read receipt to %s for event %s: %w", roomID, mostRecentEventID, err)
-	}
-	return nil
 }
 
 func handleAttachment(ctx context.Context, roomID id.RoomID, chatwootMessageID int, chatwootAttachment chatwootapi.Attachment) (*mautrix.RespSendEvent, error) {
