@@ -32,8 +32,6 @@ Matrix chat:
   - [x] Mark the canonical DM with a label
 
 - [x] Multiple chats with help bot supported
-- [x] Read receipt sent when message is sent from Chatwoot or when conversation
-      is resolved in Chatwoot
 - [x] Error notifications as private messages when bridging fails in either
       direction
 
