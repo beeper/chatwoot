@@ -489,7 +489,7 @@ func HandleRedaction(ctx context.Context, _ mautrix.EventSource, evt *event.Even
 	defer log.Debug().Msg("released send lock")
 	defer roomSendlocks[evt.RoomID].Unlock()
 
-	messageIDs, err := stateStore.GetChatwootMessageIDsForMatrixEventID(ctx, evt.ID)
+	messageIDs, err := stateStore.GetChatwootMessageIDsForMatrixEventID(ctx, evt.Redacts)
 	if err != nil || len(messageIDs) == 0 {
 		log.Err(err).Str("redacts", evt.Redacts.String()).Msg("no Chatwoot message for redacted event")
 		return
