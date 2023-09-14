@@ -271,38 +271,56 @@ func GetOrCreateChatwootConversation(ctx context.Context, roomID id.RoomID, evt 
 		return conversationID, nil
 	}
 
-	joinedMembers := client.StateStore.(*sqlstatestore.SQLStateStore).GetRoomMembers(roomID, event.MembershipJoin)
-	memberCount := len(joinedMembers)
+	for i := 0; i < 2; i++ {
+		joinedMembers := client.StateStore.(*sqlstatestore.SQLStateStore).GetRoomMembers(roomID, event.MembershipJoin)
+		memberCount := len(joinedMembers)
 
-	if configuration.BridgeIfMembersLessThan >= 0 && memberCount >= configuration.BridgeIfMembersLessThan {
-		log.Info().
-			Int("member_count", memberCount).
-			Int("bridge_if_members_less_than", configuration.BridgeIfMembersLessThan).
-			Msg("not creating Chatwoot conversation for room with too many members")
-		return -1, fmt.Errorf("not creating Chatwoot conversation for room with %d members", memberCount)
-	}
-
-	contactMxid := evt.Sender
-	if configuration.Username == evt.Sender {
-		// This message came from the bot. Look for the other
-		// users in the room, and use them instead.
-		delete(joinedMembers, evt.Sender)
-		if len(joinedMembers) != 1 {
-			log.Warn().Msg("not creating Chatwoot conversation for non-DM room")
-			return -1, fmt.Errorf("not creating Chatwoot conversation for non-DM room")
+		if configuration.BridgeIfMembersLessThan >= 0 && memberCount >= configuration.BridgeIfMembersLessThan {
+			log.Info().
+				Int("member_count", memberCount).
+				Int("bridge_if_members_less_than", configuration.BridgeIfMembersLessThan).
+				Msg("not creating Chatwoot conversation for room with too many members")
+			return -1, fmt.Errorf("not creating Chatwoot conversation for room with %d members", memberCount)
 		}
-		for k := range joinedMembers {
-			contactMxid = k
-		}
-	}
 
-	log.Warn().Err(err).Msg("no existing Chatwoot conversation found")
-	customAttrs := map[string]string{}
-	deviceTypeKey, deviceVersion := GetCustomAttrForDevice(ctx, evt)
-	if deviceTypeKey != "" && deviceVersion != "" {
-		customAttrs[deviceTypeKey] = deviceVersion
+		contactMxid := evt.Sender
+		if configuration.Username == evt.Sender {
+			// This message came from the bot. Look for the other
+			// users in the room, and use them instead.
+			delete(joinedMembers, evt.Sender)
+			if len(joinedMembers) != 1 {
+				log.Warn().Msg("not creating Chatwoot conversation for non-DM room, re-fetching joined members")
+
+				// TODO: this is a hack because sometimes the database state is not
+				// correct. We re-fetch the joined members from the server to get
+				// an updated set of users.
+				membersResp, err := client.JoinedMembers(roomID)
+				if err != nil {
+					return -1, fmt.Errorf("failed to get joined members to verify if this conversation is a non-DM room: %w", err)
+				}
+
+				if len(membersResp.Joined) == 1 {
+					// Only the bot is in the room, leave it
+					log.Warn().Msg("leaving room because it was a non-DM room with only the bot in it")
+					client.LeaveRoom(roomID)
+					break
+				}
+				continue
+			}
+			for k := range joinedMembers {
+				contactMxid = k
+			}
+		}
+
+		log.Warn().Err(err).Msg("no existing Chatwoot conversation found")
+		customAttrs := map[string]string{}
+		deviceTypeKey, deviceVersion := GetCustomAttrForDevice(ctx, evt)
+		if deviceTypeKey != "" && deviceVersion != "" {
+			customAttrs[deviceTypeKey] = deviceVersion
+		}
+		return createChatwootConversation(ctx, evt.RoomID, contactMxid, customAttrs)
 	}
-	return createChatwootConversation(ctx, evt.RoomID, contactMxid, customAttrs)
+	return -1, fmt.Errorf("failed to create Chatwoot conversation for room %s", roomID)
 }
 
 func HandleReaction(ctx context.Context, _ mautrix.EventSource, evt *event.Event) {
