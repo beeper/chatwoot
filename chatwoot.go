@@ -142,10 +142,10 @@ func main() {
 		Password:   password,
 	}
 	cryptoHelper.DBAccountID = configuration.Username.String()
-	cryptoHelper.DecryptErrorCallback = func(evt *event.Event, err error) {
+	cryptoHelper.DecryptErrorCallback = func(evt *event.Event, decryptErr error) {
 		log := getLogger(evt)
 		ctx := log.WithContext(context.TODO())
-		log.Error().Err(err).Msg("Failed to decrypt message")
+		log.Error().Err(decryptErr).Msg("Failed to decrypt message")
 
 		stateStore.UpdateMostRecentEventIdForRoom(ctx, evt.RoomID, evt.ID)
 		if !VerifyFromAuthorizedUser(evt.Sender) {
@@ -153,17 +153,16 @@ func main() {
 		}
 
 		conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, evt.RoomID)
-
 		if err != nil {
-			log.Warn().Msg("no Chatwoot conversation associated with this room")
+			log.Warn().Err(err).Msg("no Chatwoot conversation associated with this room")
 			return
 		}
 
-		DoRetry(ctx, fmt.Sprintf("send private error message to %d for %+v", conversationID, err), func(ctx context.Context) (*chatwootapi.Message, error) {
+		DoRetry(ctx, fmt.Sprintf("send private error message to %d for %+v", conversationID, decryptErr), func(ctx context.Context) (*chatwootapi.Message, error) {
 			return chatwootAPI.SendPrivateMessage(
 				ctx,
 				conversationID,
-				fmt.Sprintf("**Failed to decrypt Matrix event (%s). You probably missed a message!**\n\nError: %+v", evt.ID, err))
+				fmt.Sprintf("**Failed to decrypt Matrix event (%s). You probably missed a message!**\n\nError: %+v", evt.ID, decryptErr))
 		})
 	}
 
