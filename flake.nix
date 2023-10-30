@@ -25,7 +25,7 @@
           };
           devShells.default = pkgs.mkShell {
             packages = with pkgs; [
-              go_1_19
+              go_1_21
               olm
               pre-commit
               gotools
