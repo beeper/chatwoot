@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/dbutil"
 	"go.mau.fi/zeroconfig"
 	"maunium.net/go/mautrix/id"
-	"maunium.net/go/mautrix/util/dbutil"
 )
 
 type BackfillConfiguration struct {

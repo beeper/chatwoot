@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/dbutil"
 	"maunium.net/go/mautrix/id"
-	"maunium.net/go/mautrix/util/dbutil"
 )
 
 func (store *Database) SetChatwootMessageIdForMatrixEvent(ctx context.Context, eventID id.EventID, chatwootMessageId int) error {
