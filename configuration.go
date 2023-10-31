@@ -15,6 +15,11 @@ type BackfillConfiguration struct {
 	ConversationIDStateEvents bool `yaml:"conversation_id_state_events"`
 }
 
+type HomeserverWhitelist struct {
+	Enable  bool     `yaml:"enable"`
+	Allowed []string `yaml:"allowed"`
+}
+
 type Configuration struct {
 	// Authentication settings
 	Homeserver   string    `yaml:"homeserver"`
@@ -31,10 +36,10 @@ type Configuration struct {
 	Database dbutil.Config `yaml:"database"`
 
 	// Bot settings
-	AllowMessagesFromUsersOnOtherHomeservers bool   `yaml:"allow_messages_from_users_on_other_homeservers"`
-	CanonicalDMPrefix                        string `yaml:"canonical_dm_prefix"`
-	BridgeIfMembersLessThan                  int    `yaml:"bridge_if_members_less_than"`
-	RenderMarkdown                           bool   `yaml:"render_markdown"`
+	HomeserverWhitelist     HomeserverWhitelist `yaml:"homeserver_whitelist"`
+	CanonicalDMPrefix       string              `yaml:"canonical_dm_prefix"`
+	BridgeIfMembersLessThan int                 `yaml:"bridge_if_members_less_than"`
+	RenderMarkdown          bool                `yaml:"render_markdown"`
 
 	// Webhook listener settings
 	ListenPort int `yaml:"listen_port"`

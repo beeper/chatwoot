@@ -33,9 +33,13 @@ database:
   max_conn_lifetime: null
 
 # ===== Bot Settings =====
-# Boolean indicating whether or not to create conversations for messages
-# originating from users on other homeservers. Defaults to false.
-allow_messages_from_users_on_other_homeservers: false
+# Whitelist for which homeservers should be allowed to create conversations.
+homeserver_whitelist:
+  # Whether to enable the whitelist.
+  enable: false
+  # A list of allowed homeservers.
+  allowed:
+    - example.com
 # If not "", when creating a conversation, if the Matrix room name starts
 # with this prefix, it will be labeled with the "canonical-dm" label. Defaults
 # to "".

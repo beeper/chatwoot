@@ -33,7 +33,6 @@ var configuration Configuration
 var stateStore *database.Database
 
 var chatwootAPI *chatwootapi.ChatwootAPI
-var botHomeserver string
 
 var roomSendlocks map[id.RoomID]*sync.Mutex
 
@@ -62,11 +61,11 @@ func main() {
 
 	// Default configuration values
 	configuration = Configuration{
-		AllowMessagesFromUsersOnOtherHomeservers: false,
-		ChatwootBaseUrl:                          "https://app.chatwoot.com/",
-		ListenPort:                               8080,
-		BridgeIfMembersLessThan:                  -1,
-		RenderMarkdown:                           false,
+		HomeserverWhitelist:     HomeserverWhitelist{Enable: false},
+		ChatwootBaseUrl:         "https://app.chatwoot.com/",
+		ListenPort:              8080,
+		BridgeIfMembersLessThan: -1,
+		RenderMarkdown:          false,
 		Backfill: BackfillConfiguration{
 			ChatwootConversations: true,
 		},
@@ -84,7 +83,6 @@ func main() {
 	}
 
 	log.Info().Interface("configuration", configuration).Msg("Config loaded")
-	botHomeserver = configuration.Username.Homeserver()
 
 	log.Info().Msg("Chatwoot service starting...")
 
@@ -148,7 +146,7 @@ func main() {
 		log.Error().Err(decryptErr).Msg("Failed to decrypt message")
 
 		stateStore.UpdateMostRecentEventIdForRoom(ctx, evt.RoomID, evt.ID)
-		if !VerifyFromAuthorizedUser(evt.Sender) {
+		if !VerifyFromAuthorizedUser(ctx, evt.Sender) {
 			return
 		}
 
@@ -179,7 +177,7 @@ func main() {
 		ctx := log.WithContext(context.TODO())
 
 		stateStore.UpdateMostRecentEventIdForRoom(ctx, evt.RoomID, evt.ID)
-		if VerifyFromAuthorizedUser(evt.Sender) {
+		if VerifyFromAuthorizedUser(ctx, evt.Sender) {
 			go HandleBeeperClientInfo(ctx, evt)
 			go HandleMessage(ctx, source, evt)
 		}
@@ -189,7 +187,7 @@ func main() {
 		ctx := log.WithContext(context.TODO())
 
 		stateStore.UpdateMostRecentEventIdForRoom(ctx, evt.RoomID, evt.ID)
-		if VerifyFromAuthorizedUser(evt.Sender) {
+		if VerifyFromAuthorizedUser(ctx, evt.Sender) {
 			go HandleBeeperClientInfo(ctx, evt)
 			go HandleReaction(ctx, source, evt)
 		}
@@ -199,7 +197,7 @@ func main() {
 		ctx := log.WithContext(context.TODO())
 
 		stateStore.UpdateMostRecentEventIdForRoom(ctx, evt.RoomID, evt.ID)
-		if VerifyFromAuthorizedUser(evt.Sender) {
+		if VerifyFromAuthorizedUser(ctx, evt.Sender) {
 			go HandleBeeperClientInfo(ctx, evt)
 			go HandleRedaction(ctx, source, evt)
 		}
@@ -371,14 +369,24 @@ func AllowKeyShare(ctx context.Context, device *id.Device, info event.RequestedK
 	}
 }
 
-func VerifyFromAuthorizedUser(sender id.UserID) bool {
-	if configuration.AllowMessagesFromUsersOnOtherHomeservers {
+func VerifyFromAuthorizedUser(ctx context.Context, sender id.UserID) bool {
+	log := zerolog.Ctx(ctx)
+	if !configuration.HomeserverWhitelist.Enable {
+		log.Debug().Msg("homeserver whitelist disabled, allowing all messages")
 		return true
 	}
 	_, homeserver, err := sender.Parse()
 	if err != nil {
+		log.Warn().Err(err).Msg("failed to parse sender")
 		return false
 	}
 
-	return botHomeserver == homeserver
+	for _, allowedHS := range configuration.HomeserverWhitelist.Allowed {
+		if homeserver == allowedHS {
+			log.Debug().Str("sender_hs", allowedHS).Msg("allowing messages from whitelisted homeserver")
+			return true
+		}
+	}
+	log.Debug().Str("sender_hs", homeserver).Msg("rejecting messages from other homeserver")
+	return false
 }
