@@ -40,6 +40,40 @@ homeserver_whitelist:
   # A list of allowed homeservers.
   allowed:
     - example.com
+# Configure whether and how to start new chats from Chatwoot.
+start_new_chat:
+  # Whether to enable starting new chats from Chatwoot.
+  enable: false
+  # Endpoint that will create the Matrix conversation. Auth should be with the
+  # Matrix access token.
+  #
+  # The endpoint must be a POST endpoint that accepts a JSON object with the
+  # following content (both fields optional, and potentially other fields
+  # included, but should not be depended on):
+  #
+  #   {
+  #     "phone_number":"+11234567890",
+  #     "email":"email@example.com"
+  #   }
+  #
+  # and should return 200 with a JSON object with the following content (and
+  # optionally other fields):
+  #
+  #   {
+  #     "room_id": "!abcd:beeper.local"
+  #   }
+  #
+  # or a non-200 status code with an error (and optionally other fields):
+  #
+  #   {
+  #     "error": "+11234567890 is not on iMessage"
+  #   }
+  #
+  # the behavior of the endpoint is undefined if the request payload is
+  # malformed.
+  endpoint:
+  # The Authentication token to use on the request.
+  token:
 # If not "", when creating a conversation, if the Matrix room name starts
 # with this prefix, it will be labeled with the "canonical-dm" label. Defaults
 # to "".

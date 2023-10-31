@@ -20,6 +20,12 @@ type HomeserverWhitelist struct {
 	Allowed []string `yaml:"allowed"`
 }
 
+type StartNewChat struct {
+	Enable   bool   `yaml:"enable"`
+	Endpoint string `yaml:"endpoint"`
+	Token    string `yaml:"token"`
+}
+
 type Configuration struct {
 	// Authentication settings
 	Homeserver   string    `yaml:"homeserver"`
@@ -37,6 +43,7 @@ type Configuration struct {
 
 	// Bot settings
 	HomeserverWhitelist     HomeserverWhitelist `yaml:"homeserver_whitelist"`
+	StartNewChat            StartNewChat        `yaml:"start_new_chat"`
 	CanonicalDMPrefix       string              `yaml:"canonical_dm_prefix"`
 	BridgeIfMembersLessThan int                 `yaml:"bridge_if_members_less_than"`
 	RenderMarkdown          bool                `yaml:"render_markdown"`

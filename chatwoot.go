@@ -62,6 +62,7 @@ func main() {
 	// Default configuration values
 	configuration = Configuration{
 		HomeserverWhitelist:     HomeserverWhitelist{Enable: false},
+		StartNewChat:            StartNewChat{Enable: false},
 		ChatwootBaseUrl:         "https://app.chatwoot.com/",
 		ListenPort:              8080,
 		BridgeIfMembersLessThan: -1,
