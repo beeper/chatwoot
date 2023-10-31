@@ -80,11 +80,19 @@ func (api *ChatwootAPI) CreateContact(ctx context.Context, userID id.UserID) (in
 		Str("user_id", userID.String()).
 		Logger()
 
-	log.Info().Msg("Creating contact")
+	name := userID.String()
+	if userID.Homeserver() == "beeper.local" {
+		decoded, err := id.DecodeUserLocalpart(strings.TrimPrefix(userID.Localpart(), "imessagego_1."))
+		if err == nil {
+			name = decoded
+		}
+	}
+
+	log.Info().Str("name", name).Msg("Creating contact")
 	payload := CreateContactPayload{
 		InboxID:    api.InboxID,
-		Name:       userID.String(),
-		Identifier: userID.String(),
+		Name:       name,
+		Identifier: name,
 	}
 	jsonValue, _ := json.Marshal(payload)
 	req, err := http.NewRequest(http.MethodPost, api.MakeUri("contacts"), bytes.NewBuffer(jsonValue))
@@ -106,10 +114,8 @@ func (api *ChatwootAPI) CreateContact(ctx context.Context, userID id.UserID) (in
 		return 0, fmt.Errorf("POST contacts returned non-200 status code: %d", resp.StatusCode)
 	}
 
-	decoder := json.NewDecoder(resp.Body)
 	var contactPayload ContactPayload
-	err = decoder.Decode(&contactPayload)
-	if err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&contactPayload); err != nil {
 		return 0, err
 	}
 
@@ -117,14 +123,28 @@ func (api *ChatwootAPI) CreateContact(ctx context.Context, userID id.UserID) (in
 	return contactPayload.Payload.Contact.ID, nil
 }
 
-func (api *ChatwootAPI) ContactIDForMXID(userID id.UserID) (int, error) {
+func (api *ChatwootAPI) ContactIDForMXID(ctx context.Context, userID id.UserID) (int, error) {
+	log := zerolog.Ctx(ctx)
+	query := userID.String()
+	if userID.Homeserver() == "beeper.local" {
+		// Special handling for bridged iMessages.
+		if strings.HasPrefix(userID.Localpart(), "imessagego_1.") {
+			decoded, err := id.DecodeUserLocalpart(strings.TrimPrefix(userID.Localpart(), "imessagego_1."))
+			if err == nil {
+				query = decoded
+			}
+		}
+	}
+
+	log.Info().Str("query", query).Msg("Searching for contact")
+
 	req, err := http.NewRequest(http.MethodGet, api.MakeUri("contacts/search"), nil)
 	if err != nil {
 		return 0, err
 	}
 
 	q := req.URL.Query()
-	q.Add("q", userID.String())
+	q.Add("q", query)
 	req.URL.RawQuery = q.Encode()
 
 	resp, err := api.DoRequest(req)
@@ -135,19 +155,22 @@ func (api *ChatwootAPI) ContactIDForMXID(userID id.UserID) (int, error) {
 		return 0, fmt.Errorf("GET contacts/search returned non-200 status code: %d", resp.StatusCode)
 	}
 
-	decoder := json.NewDecoder(resp.Body)
 	var contactsPayload ContactsPayload
-	err = decoder.Decode(&contactsPayload)
-	if err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&contactsPayload); err != nil {
 		return 0, err
 	}
+
 	for _, contact := range contactsPayload.Payload {
-		if contact.Identifier == userID.String() {
+		if contact.Identifier == query {
+			return contact.ID, nil
+		} else if contact.Email == query {
+			return contact.ID, nil
+		} else if contact.PhoneNumber == query {
 			return contact.ID, nil
 		}
 	}
 
-	return 0, fmt.Errorf("couldn't find user with user ID %s", userID)
+	return 0, fmt.Errorf("couldn't find user with user ID %s", query)
 }
 
 func (api *ChatwootAPI) GetChatwootConversation(conversationID int) (*Conversation, error) {
@@ -164,13 +187,9 @@ func (api *ChatwootAPI) GetChatwootConversation(conversationID int) (*Conversati
 		return nil, fmt.Errorf("GET conversations/%d returned non-200 status code: %d", conversationID, resp.StatusCode)
 	}
 
-	decoder := json.NewDecoder(resp.Body)
 	var conversation Conversation
-	err = decoder.Decode(&conversation)
-	if err != nil {
-		return nil, err
-	}
-	return &conversation, nil
+	err = json.NewDecoder(resp.Body).Decode(&conversation)
+	return &conversation, err
 }
 
 func (api *ChatwootAPI) CreateConversation(sourceID string, contactID int, additionalAttrs map[string]string) (*Conversation, error) {
@@ -196,13 +215,9 @@ func (api *ChatwootAPI) CreateConversation(sourceID string, contactID int, addit
 		return nil, fmt.Errorf("POST conversations returned non-200 status code: %d: %s", resp.StatusCode, string(content))
 	}
 
-	decoder := json.NewDecoder(resp.Body)
 	var conversation Conversation
-	err = decoder.Decode(&conversation)
-	if err != nil {
-		return nil, err
-	}
-	return &conversation, nil
+	err = json.NewDecoder(resp.Body).Decode(&conversation)
+	return &conversation, err
 }
 
 func (api *ChatwootAPI) GetConversationLabels(conversationID int) ([]string, error) {
@@ -220,9 +235,8 @@ func (api *ChatwootAPI) GetConversationLabels(conversationID int) ([]string, err
 		return nil, fmt.Errorf("POST conversations returned non-200 status code: %d: %s", resp.StatusCode, string(content))
 	}
 
-	decoder := json.NewDecoder(resp.Body)
 	var labels ConversationLabelsPayload
-	err = decoder.Decode(&labels)
+	err = json.NewDecoder(resp.Body).Decode(&labels)
 	return labels.Payload, err
 }
 

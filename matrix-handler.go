@@ -38,7 +38,7 @@ func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMX
 		return conversationID, nil
 	}
 
-	contactID, err := chatwootAPI.ContactIDForMXID(contactMXID)
+	contactID, err := chatwootAPI.ContactIDForMXID(ctx, contactMXID)
 	if err != nil {
 		log.Warn().Err(err).Msg("contact ID not found for user, will attempt to create one")
 
