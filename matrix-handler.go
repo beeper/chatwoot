@@ -20,11 +20,11 @@ import (
 
 var createRoomLock sync.Mutex = sync.Mutex{}
 
-func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMxid id.UserID, customAttrs map[string]string) (int, error) {
+func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMXID id.UserID, customAttrs map[string]string) (int, error) {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "create_chatwoot_conversation").
 		Str("room_id", roomID.String()).
-		Str("contact_mxid", contactMxid.String()).
+		Str("contact_mxid", contactMXID.String()).
 		Interface("custom_attrs", customAttrs).
 		Logger()
 	ctx = log.WithContext(ctx)
@@ -38,13 +38,13 @@ func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMx
 		return conversationID, nil
 	}
 
-	contactID, err := chatwootAPI.ContactIDForMxid(contactMxid)
+	contactID, err := chatwootAPI.ContactIDForMXID(contactMXID)
 	if err != nil {
 		log.Warn().Err(err).Msg("contact ID not found for user, will attempt to create one")
 
-		contactID, err = chatwootAPI.CreateContact(ctx, contactMxid)
+		contactID, err = chatwootAPI.CreateContact(ctx, contactMXID)
 		if err != nil {
-			return 0, fmt.Errorf("create contact failed for %s: %w", contactMxid, err)
+			return 0, fmt.Errorf("create contact failed for %s: %w", contactMXID, err)
 		}
 		log.Info().Int("contact_id", contactID).Msg("Contact created")
 	}
@@ -283,7 +283,7 @@ func GetOrCreateChatwootConversation(ctx context.Context, roomID id.RoomID, evt 
 			return -1, fmt.Errorf("not creating Chatwoot conversation for room with %d members", memberCount)
 		}
 
-		contactMxid := evt.Sender
+		contactMXID := evt.Sender
 		if configuration.Username == evt.Sender {
 			// This message came from the bot. Look for the other
 			// users in the room, and use them instead.
@@ -308,7 +308,7 @@ func GetOrCreateChatwootConversation(ctx context.Context, roomID id.RoomID, evt 
 				continue
 			}
 			for k := range joinedMembers {
-				contactMxid = k
+				contactMXID = k
 			}
 		}
 
@@ -318,7 +318,7 @@ func GetOrCreateChatwootConversation(ctx context.Context, roomID id.RoomID, evt 
 		if deviceTypeKey != "" && deviceVersion != "" {
 			customAttrs[deviceTypeKey] = deviceVersion
 		}
-		return createChatwootConversation(ctx, evt.RoomID, contactMxid, customAttrs)
+		return createChatwootConversation(ctx, evt.RoomID, contactMXID, customAttrs)
 	}
 	return -1, fmt.Errorf("failed to create Chatwoot conversation for room %s", roomID)
 }

@@ -117,7 +117,7 @@ func (api *ChatwootAPI) CreateContact(ctx context.Context, userID id.UserID) (in
 	return contactPayload.Payload.Contact.ID, nil
 }
 
-func (api *ChatwootAPI) ContactIDForMxid(userID id.UserID) (int, error) {
+func (api *ChatwootAPI) ContactIDForMXID(userID id.UserID) (int, error) {
 	req, err := http.NewRequest(http.MethodGet, api.MakeUri("contacts/search"), nil)
 	if err != nil {
 		return 0, err

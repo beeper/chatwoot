@@ -55,14 +55,14 @@ func HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		log.Err(err).Msg("failed to read webhook body")
 	}
 
-	var eventJson map[string]any
-	err = json.Unmarshal(webhookBody, &eventJson)
+	var eventJSON map[string]any
+	err = json.Unmarshal(webhookBody, &eventJSON)
 	if err != nil {
 		log.Err(err).Msg("error decoding webhook body")
 		return
 	}
 
-	if eventType, found := eventJson["event"]; found {
+	if eventType, found := eventJSON["event"]; found {
 		switch eventType {
 		case "message_created", "message_updated":
 			var mc chatwootapi.MessageCreated
