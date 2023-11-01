@@ -299,6 +299,12 @@ func HandleMessageCreated(ctx context.Context, mc chatwootapi.MessageCreated) er
 
 		log.Info().Str("room_id", sncResp.RoomID.String()).Msg("created new chat for conversation")
 		roomID = sncResp.RoomID
+
+		err = stateStore.UpdateConversationIdForRoom(ctx, sncResp.RoomID, mc.Conversation.ID)
+		if err != nil {
+			log.Err(err).Msg("failed to update conversation ID for room")
+			return err
+		}
 	}
 	log = log.With().Str("room_id", roomID.String()).Logger()
 	ctx = log.WithContext(ctx)
