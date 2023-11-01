@@ -297,12 +297,19 @@ func HandleMessageCreated(ctx context.Context, mc chatwootapi.MessageCreated) er
 			return fmt.Errorf("invalid start new chat response: %s", sncResp.Error)
 		}
 
-		log.Info().Str("room_id", sncResp.RoomID.String()).Msg("created new chat for conversation")
+		log = log.With().Str("room_id", sncResp.RoomID.String()).Logger()
+		log.Info().Msg("created new chat for conversation")
 		roomID = sncResp.RoomID
 
 		err = stateStore.UpdateConversationIdForRoom(ctx, sncResp.RoomID, mc.Conversation.ID)
 		if err != nil {
 			log.Err(err).Msg("failed to update conversation ID for room")
+			return err
+		}
+
+		_, err = client.State(sncResp.RoomID)
+		if err != nil {
+			log.Err(err).Msg("failed to get room state")
 			return err
 		}
 	}
