@@ -400,6 +400,32 @@ func HandleReaction(ctx context.Context, _ mautrix.EventSource, evt *event.Event
 	stateStore.SetChatwootMessageIdForMatrixEvent(ctx, evt.ID, (*cm).ID)
 }
 
+func downloadAndDecryptMedia(ctx context.Context, content *event.MessageEventContent) ([]byte, error) {
+	var file *event.EncryptedFileInfo
+	rawMXC := content.URL
+	if content.File != nil {
+		file = content.File
+		rawMXC = file.URL
+	}
+	mxc, err := rawMXC.Parse()
+	if err != nil {
+		return nil, fmt.Errorf("malformed content URL: %w", err)
+	}
+
+	data, err := client.DownloadBytes(mxc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to download media: %w", err)
+	}
+
+	if file != nil {
+		err = file.DecryptInPlace(data)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt media: %w", err)
+		}
+	}
+	return data, nil
+}
+
 func HandleMatrixMessageContent(ctx context.Context, evt *event.Event, conversationID int, content *event.MessageEventContent) ([]*chatwootapi.Message, error) {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "handle_matrix_message_content").
@@ -432,27 +458,9 @@ func HandleMatrixMessageContent(ctx context.Context, evt *event.Event, conversat
 		return []*chatwootapi.Message{cm}, err
 
 	case event.MsgAudio, event.MsgFile, event.MsgImage, event.MsgVideo:
-		var file *event.EncryptedFileInfo
-		rawMXC := content.URL
-		if content.File != nil {
-			file = content.File
-			rawMXC = file.URL
-		}
-		mxc, err := rawMXC.Parse()
+		data, err := downloadAndDecryptMedia(ctx, content)
 		if err != nil {
-			return nil, fmt.Errorf("malformed content URL in %s: %w", evt.ID, err)
-		}
-
-		data, err := client.DownloadBytes(mxc)
-		if err != nil {
-			return nil, fmt.Errorf("failed to download media in %s: %w", evt.ID, err)
-		}
-
-		if file != nil {
-			err = file.DecryptInPlace(data)
-			if err != nil {
-				return nil, fmt.Errorf("failed to decrypt media in %s: %w", evt.ID, err)
-			}
+			return nil, fmt.Errorf("failed to download and decrypt media in %s: %w", evt.ID, err)
 		}
 
 		filename := content.Body
@@ -483,6 +491,42 @@ func HandleMatrixMessageContent(ctx context.Context, evt *event.Event, conversat
 		}
 
 		return messages, err
+
+	case event.MsgBeeperGallery:
+		var messages []*chatwootapi.Message
+		for _, part := range content.BeeperGalleryImages {
+			data, err := downloadAndDecryptMedia(ctx, part)
+			if err != nil {
+				return nil, fmt.Errorf("failed to download and decrypt media in %s: %w", evt.ID, err)
+			}
+
+			filename := part.Body
+			if part.FileName != "" {
+				filename = part.FileName
+			}
+
+			mimeType := "application/octet-stream"
+			if part.Info != nil {
+				mimeType = part.Info.MimeType
+			}
+
+			cm, err := chatwootAPI.SendAttachmentMessage(conversationID, filename, mimeType, bytes.NewReader(data), messageType)
+			if err != nil {
+				return nil, fmt.Errorf("failed to send attachment message. Error: %w", err)
+			}
+			messages = append(messages, cm)
+		}
+
+		if content.BeeperGalleryCaption != "" {
+			captionMessage, captionErr := chatwootAPI.SendTextMessage(ctx, conversationID, fmt.Sprintf("Gallery Caption: %s", content.BeeperGalleryCaption), messageType)
+			if captionErr != nil {
+				log.Err(captionErr).Msg("failed to send caption message")
+			} else {
+				messages = append(messages, captionMessage)
+			}
+		}
+
+		return messages, nil
 
 	default:
 		return nil, fmt.Errorf("unsupported message type %s in %s", content.MsgType, evt.ID)
