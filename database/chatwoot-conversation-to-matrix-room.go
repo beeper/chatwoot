@@ -13,11 +13,11 @@ func (store *Database) GetChatwootConversationIDFromMatrixRoom(ctx context.Conte
 		SELECT chatwoot_conversation_id
 		  FROM chatwoot_conversation_to_matrix_room
 		 WHERE matrix_room_id = $1`, roomID)
-	var chatwootConversationId int
-	if err := row.Scan(&chatwootConversationId); err != nil {
+	var chatwootConversationID int
+	if err := row.Scan(&chatwootConversationID); err != nil {
 		return -1, err
 	}
-	return chatwootConversationId, nil
+	return chatwootConversationID, nil
 }
 
 func (store *Database) GetMatrixRoomFromChatwootConversation(ctx context.Context, conversationID int) (id.RoomID, id.EventID, error) {
@@ -26,18 +26,18 @@ func (store *Database) GetMatrixRoomFromChatwootConversation(ctx context.Context
 		  FROM chatwoot_conversation_to_matrix_room
 		 WHERE chatwoot_conversation_id = $1`, conversationID)
 	var roomID id.RoomID
-	var mostRecentEventIdStr sql.NullString
-	if err := row.Scan(&roomID, &mostRecentEventIdStr); err != nil {
+	var mostRecentEventIDStr sql.NullString
+	if err := row.Scan(&roomID, &mostRecentEventIDStr); err != nil {
 		return "", "", err
 	}
-	if mostRecentEventIdStr.Valid {
-		return roomID, id.EventID(mostRecentEventIdStr.String), nil
+	if mostRecentEventIDStr.Valid {
+		return roomID, id.EventID(mostRecentEventIDStr.String), nil
 	} else {
 		return roomID, id.EventID(""), nil
 	}
 }
 
-func (store *Database) UpdateMostRecentEventIdForRoom(ctx context.Context, roomID id.RoomID, mostRecentEventID id.EventID) error {
+func (store *Database) UpdateMostRecentEventIDForRoom(ctx context.Context, roomID id.RoomID, mostRecentEventID id.EventID) error {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "update_most_recent_event_id_for_room").
 		Str("most_recent_event_id", mostRecentEventID.String()).
@@ -65,7 +65,7 @@ func (store *Database) UpdateMostRecentEventIdForRoom(ctx context.Context, roomI
 	return tx.Commit()
 }
 
-func (store *Database) UpdateConversationIdForRoom(ctx context.Context, roomID id.RoomID, conversationID int) error {
+func (store *Database) UpdateConversationIDForRoom(ctx context.Context, roomID id.RoomID, conversationID int) error {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "update_conversation_id_for_room").
 		Int("conversation_id", conversationID).

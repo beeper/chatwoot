@@ -146,7 +146,7 @@ func main() {
 		ctx := log.WithContext(context.TODO())
 		log.Error().Err(decryptErr).Msg("Failed to decrypt message")
 
-		stateStore.UpdateMostRecentEventIdForRoom(ctx, evt.RoomID, evt.ID)
+		stateStore.UpdateMostRecentEventIDForRoom(ctx, evt.RoomID, evt.ID)
 		if !VerifyFromAuthorizedUser(ctx, evt.Sender) {
 			return
 		}
@@ -177,7 +177,7 @@ func main() {
 		log := getLogger(evt)
 		ctx := log.WithContext(context.TODO())
 
-		stateStore.UpdateMostRecentEventIdForRoom(ctx, evt.RoomID, evt.ID)
+		stateStore.UpdateMostRecentEventIDForRoom(ctx, evt.RoomID, evt.ID)
 		if VerifyFromAuthorizedUser(ctx, evt.Sender) {
 			go HandleBeeperClientInfo(ctx, evt)
 			go HandleMessage(ctx, source, evt)
@@ -187,7 +187,7 @@ func main() {
 		log := getLogger(evt)
 		ctx := log.WithContext(context.TODO())
 
-		stateStore.UpdateMostRecentEventIdForRoom(ctx, evt.RoomID, evt.ID)
+		stateStore.UpdateMostRecentEventIDForRoom(ctx, evt.RoomID, evt.ID)
 		if VerifyFromAuthorizedUser(ctx, evt.Sender) {
 			go HandleBeeperClientInfo(ctx, evt)
 			go HandleReaction(ctx, source, evt)
@@ -197,7 +197,7 @@ func main() {
 		log := getLogger(evt)
 		ctx := log.WithContext(context.TODO())
 
-		stateStore.UpdateMostRecentEventIdForRoom(ctx, evt.RoomID, evt.ID)
+		stateStore.UpdateMostRecentEventIDForRoom(ctx, evt.RoomID, evt.ID)
 		if VerifyFromAuthorizedUser(ctx, evt.Sender) {
 			go HandleBeeperClientInfo(ctx, evt)
 			go HandleRedaction(ctx, source, evt)

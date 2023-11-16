@@ -59,7 +59,7 @@ func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMX
 	log = log.With().Int("conversation_id", conversation.ID).Logger()
 	ctx = log.WithContext(ctx)
 
-	err = stateStore.UpdateConversationIdForRoom(ctx, roomID, conversation.ID)
+	err = stateStore.UpdateConversationIDForRoom(ctx, roomID, conversation.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -249,7 +249,7 @@ func HandleMessage(ctx context.Context, _ mautrix.EventSource, evt *event.Event)
 		return
 	}
 	for _, m := range cm {
-		stateStore.SetChatwootMessageIdForMatrixEvent(ctx, evt.ID, m.ID)
+		stateStore.SetChatwootMessageIDForMatrixEvent(ctx, evt.ID, m.ID)
 	}
 	content := evt.Content.AsMessage()
 	if content.MsgType == event.MsgText || content.MsgType == event.MsgNotice {
@@ -397,7 +397,7 @@ func HandleReaction(ctx context.Context, _ mautrix.EventSource, evt *event.Event
 		})
 		return
 	}
-	stateStore.SetChatwootMessageIdForMatrixEvent(ctx, evt.ID, (*cm).ID)
+	stateStore.SetChatwootMessageIDForMatrixEvent(ctx, evt.ID, (*cm).ID)
 }
 
 func downloadAndDecryptMedia(ctx context.Context, content *event.MessageEventContent) ([]byte, error) {

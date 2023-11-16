@@ -301,7 +301,7 @@ func HandleMessageCreated(ctx context.Context, mc chatwootapi.MessageCreated) er
 		log.Info().Msg("created new chat for conversation")
 		roomID = sncResp.RoomID
 
-		err = stateStore.UpdateConversationIdForRoom(ctx, sncResp.RoomID, mc.Conversation.ID)
+		err = stateStore.UpdateConversationIDForRoom(ctx, sncResp.RoomID, mc.Conversation.ID)
 		if err != nil {
 			log.Err(err).Msg("failed to update conversation ID for room")
 			return err
@@ -327,7 +327,7 @@ func HandleMessageCreated(ctx context.Context, mc chatwootapi.MessageCreated) er
 	defer log.Debug().Msg("released send lock")
 	defer roomSendlocks[roomID].Unlock()
 
-	eventIDs := stateStore.GetMatrixEventIdsForChatwootMessage(ctx, mc.ID)
+	eventIDs := stateStore.GetMatrixEventIDsForChatwootMessage(ctx, mc.ID)
 
 	// Handle deletions first.
 	if mc.ContentAttributes != nil && mc.ContentAttributes.Deleted {
@@ -379,7 +379,7 @@ func HandleMessageCreated(ctx context.Context, mc chatwootapi.MessageCreated) er
 		if err != nil {
 			return err
 		}
-		stateStore.SetChatwootMessageIdForMatrixEvent(ctx, resp.EventID, mc.ID)
+		stateStore.SetChatwootMessageIDForMatrixEvent(ctx, resp.EventID, mc.ID)
 	}
 
 	for _, a := range message.Attachments {
@@ -387,7 +387,7 @@ func HandleMessageCreated(ctx context.Context, mc chatwootapi.MessageCreated) er
 		if err != nil {
 			return err
 		}
-		stateStore.SetChatwootMessageIdForMatrixEvent(ctx, resp.EventID, mc.ID)
+		stateStore.SetChatwootMessageIDForMatrixEvent(ctx, resp.EventID, mc.ID)
 	}
 
 	return nil

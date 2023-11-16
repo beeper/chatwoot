@@ -8,10 +8,10 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-func (store *Database) SetChatwootMessageIdForMatrixEvent(ctx context.Context, eventID id.EventID, chatwootMessageId int) error {
+func (store *Database) SetChatwootMessageIDForMatrixEvent(ctx context.Context, eventID id.EventID, chatwootMessageID int) error {
 	log := zerolog.Ctx(ctx).With().
 		Str("event_id", eventID.String()).
-		Int("chatwoot_message_id", chatwootMessageId).
+		Int("chatwoot_message_id", chatwootMessageID).
 		Logger()
 	ctx = log.WithContext(ctx)
 
@@ -26,7 +26,7 @@ func (store *Database) SetChatwootMessageIdForMatrixEvent(ctx context.Context, e
 		INSERT INTO chatwoot_message_to_matrix_event (matrix_event_id, chatwoot_message_id)
 			VALUES ($1, $2)
 	`
-	if _, err := tx.ExecContext(ctx, insert, eventID, chatwootMessageId); err != nil {
+	if _, err := tx.ExecContext(ctx, insert, eventID, chatwootMessageID); err != nil {
 		log.Err(err).Msg("failed to set chatwoot message ID for matrix event")
 		tx.Rollback()
 		return err
@@ -35,15 +35,15 @@ func (store *Database) SetChatwootMessageIdForMatrixEvent(ctx context.Context, e
 	return tx.Commit()
 }
 
-func (store *Database) GetMatrixEventIdsForChatwootMessage(ctx context.Context, chatwootMessageId int) []id.EventID {
-	log := zerolog.Ctx(ctx).With().Int("message_id", chatwootMessageId).Logger()
+func (store *Database) GetMatrixEventIDsForChatwootMessage(ctx context.Context, chatwootMessageID int) []id.EventID {
+	log := zerolog.Ctx(ctx).With().Int("message_id", chatwootMessageID).Logger()
 	ctx = log.WithContext(ctx)
 
 	log.Debug().Msg("getting Matrix event IDs for chatwoot message")
 	rows, err := store.DB.QueryContext(ctx, `
 		SELECT matrix_event_id
 		  FROM chatwoot_message_to_matrix_event
-		 WHERE chatwoot_message_id = $1`, chatwootMessageId)
+		 WHERE chatwoot_message_id = $1`, chatwootMessageID)
 	eventIDs := make([]id.EventID, 0)
 	if err != nil {
 		log.Err(err).Msg("failed to get Matrix event IDs for chatwoot message")
