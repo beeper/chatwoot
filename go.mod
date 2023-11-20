@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/jackc/pgx/v4 v4.18.1
 	github.com/sethvargo/go-retry v0.2.4
-	go.mau.fi/util v0.2.0
+	go.mau.fi/util v0.2.1
 	go.mau.fi/zeroconfig v0.1.2
 	maunium.net/go/mautrix v0.16.1
 )
