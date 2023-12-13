@@ -42,7 +42,25 @@ func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMX
 	if err != nil {
 		log.Warn().Err(err).Msg("contact ID not found for user, will attempt to create one")
 
-		contactID, err = chatwootAPI.CreateContact(ctx, contactMXID)
+		// Special handling for Twitter user names
+		contactName := ""
+		if strings.HasPrefix(contactMXID.Localpart(), "twitter_") {
+			memberEventContent := map[string]any{}
+			if err := client.StateEvent(roomID, event.StateMember, contactMXID.String(), &memberEventContent); err == nil {
+				log.Trace().Interface("member_event_content", memberEventContent).Msg("Got member event content")
+				if identifiers, ok := memberEventContent["com.beeper.bridge.identifiers"]; ok {
+					if identifiersList, ok := identifiers.([]any); ok {
+						if len(identifiersList) == 1 {
+							if identifier, ok := identifiersList[0].(string); ok {
+								contactName = "@" + strings.TrimPrefix(identifier, "twitter:")
+							}
+						}
+					}
+				}
+			}
+		}
+
+		contactID, err = chatwootAPI.CreateContact(ctx, contactMXID, contactName)
 		if err != nil {
 			return 0, fmt.Errorf("create contact failed for %s: %w", contactMXID, err)
 		}

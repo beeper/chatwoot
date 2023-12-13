@@ -74,17 +74,19 @@ func (api *ChatwootAPI) MakeUri(endpoint string) string {
 	return url.String()
 }
 
-func (api *ChatwootAPI) CreateContact(ctx context.Context, userID id.UserID) (int, error) {
+func (api *ChatwootAPI) CreateContact(ctx context.Context, userID id.UserID, name string) (int, error) {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "create_contact").
 		Str("user_id", userID.String()).
 		Logger()
 
-	name := userID.String()
-	if userID.Homeserver() == "beeper.local" {
-		decoded, err := id.DecodeUserLocalpart(strings.TrimPrefix(userID.Localpart(), "imessagego_1."))
-		if err == nil {
-			name = decoded
+	if name == "" {
+		name = userID.String()
+		if userID.Homeserver() == "beeper.local" && strings.HasPrefix(userID.Localpart(), "imessagego_1.") {
+			decoded, err := id.DecodeUserLocalpart(strings.TrimPrefix(userID.Localpart(), "imessagego_1."))
+			if err == nil {
+				name = decoded
+			}
 		}
 	}
 
