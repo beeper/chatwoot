@@ -50,7 +50,7 @@ jobs:
       - name: Build
         run: go build -v
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: chatwoot
           path: chatwoot
