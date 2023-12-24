@@ -18,3 +18,8 @@ repos:
           - "-w"
       - id: go-vet-repo-mod
       - id: go-staticcheck-repo-mod
+
+  - repo: https://github.com/beeper/pre-commit-go
+    rev: v0.2.2
+    hooks:
+      - id: zerolog-ban-msgf
