@@ -10,7 +10,7 @@ import (
 
 func (store *Database) SetChatwootMessageIDForMatrixEvent(ctx context.Context, eventID id.EventID, chatwootMessageID int) error {
 	log := zerolog.Ctx(ctx).With().
-		Str("event_id", eventID.String()).
+		Stringer("event_id", eventID).
 		Int("chatwoot_message_id", chatwootMessageID).
 		Logger()
 	ctx = log.WithContext(ctx)

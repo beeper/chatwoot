@@ -77,7 +77,7 @@ func (api *ChatwootAPI) MakeUri(endpoint string) string {
 func (api *ChatwootAPI) CreateContact(ctx context.Context, userID id.UserID, name string) (int, error) {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "create_contact").
-		Str("user_id", userID.String()).
+		Stringer("user_id", userID).
 		Logger()
 
 	if name == "" {

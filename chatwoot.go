@@ -120,8 +120,8 @@ func main() {
 
 	getLogger := func(evt *event.Event) zerolog.Logger {
 		return log.With().
-			Str("event_type", evt.Type.String()).
-			Str("sender", evt.Sender.String()).
+			Stringer("event_type", &evt.Type).
+			Stringer("sender", evt.Sender).
 			Str("room_id", string(evt.RoomID)).
 			Str("event_id", string(evt.ID)).
 			Logger()
@@ -304,7 +304,7 @@ func main() {
 }
 
 func backfillConversationForRoom(ctx context.Context, roomID id.RoomID) error {
-	log := zerolog.Ctx(ctx).With().Str("room_id", roomID.String()).Logger()
+	log := zerolog.Ctx(ctx).With().Stringer("room_id", roomID).Logger()
 
 	log.Info().Msg("Creating conversation for room")
 

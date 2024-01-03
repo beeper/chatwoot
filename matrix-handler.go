@@ -23,8 +23,8 @@ var createRoomLock sync.Mutex = sync.Mutex{}
 func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMXID id.UserID, customAttrs map[string]string) (int, error) {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "create_chatwoot_conversation").
-		Str("room_id", roomID.String()).
-		Str("contact_mxid", contactMXID.String()).
+		Stringer("room_id", roomID).
+		Stringer("contact_mxid", contactMXID).
 		Interface("custom_attrs", customAttrs).
 		Logger()
 	ctx = log.WithContext(ctx)
@@ -165,8 +165,8 @@ var deviceVersionRegex = regexp.MustCompile(`(\S+)( \(last updated at .*\))?`)
 func HandleBeeperClientInfo(ctx context.Context, evt *event.Event) error {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "handle_beeper_client_info").
-		Str("room_id", evt.RoomID.String()).
-		Str("event_id", evt.ID.String()).
+		Stringer("room_id", evt.RoomID).
+		Stringer("event_id", evt.ID).
 		Logger()
 	ctx = log.WithContext(ctx)
 
@@ -220,8 +220,8 @@ var rageshakeIssueRegex = regexp.MustCompile(`[A-Z]{1,5}-\d+`)
 func HandleMessage(ctx context.Context, _ mautrix.EventSource, evt *event.Event) {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "handle_message").
-		Str("room_id", evt.RoomID.String()).
-		Str("event_id", evt.ID.String()).
+		Stringer("room_id", evt.RoomID).
+		Stringer("event_id", evt.ID).
 		Logger()
 	ctx = log.WithContext(ctx)
 
@@ -344,8 +344,8 @@ func GetOrCreateChatwootConversation(ctx context.Context, roomID id.RoomID, evt 
 func HandleReaction(ctx context.Context, _ mautrix.EventSource, evt *event.Event) {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "handle_reaction").
-		Str("room_id", evt.RoomID.String()).
-		Str("event_id", evt.ID.String()).
+		Stringer("room_id", evt.RoomID).
+		Stringer("event_id", evt.ID).
 		Logger()
 	ctx = log.WithContext(ctx)
 
@@ -448,8 +448,8 @@ func HandleMatrixMessageContent(ctx context.Context, evt *event.Event, conversat
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "handle_matrix_message_content").
 		Int("conversation_id", conversationID).
-		Str("room_id", evt.RoomID.String()).
-		Str("event_id", evt.ID.String()).
+		Stringer("room_id", evt.RoomID).
+		Stringer("event_id", evt.ID).
 		Logger()
 	ctx = log.WithContext(ctx)
 
@@ -553,8 +553,8 @@ func HandleMatrixMessageContent(ctx context.Context, evt *event.Event, conversat
 
 func HandleRedaction(ctx context.Context, _ mautrix.EventSource, evt *event.Event) {
 	log := zerolog.Ctx(ctx).With().
-		Str("room_id", evt.RoomID.String()).
-		Str("event_id", evt.ID.String()).
+		Stringer("room_id", evt.RoomID).
+		Stringer("event_id", evt.ID).
 		Logger()
 	ctx = log.WithContext(ctx)
 
@@ -571,7 +571,7 @@ func HandleRedaction(ctx context.Context, _ mautrix.EventSource, evt *event.Even
 
 	messageIDs, err := stateStore.GetChatwootMessageIDsForMatrixEventID(ctx, evt.Redacts)
 	if err != nil || len(messageIDs) == 0 {
-		log.Err(err).Str("redacts", evt.Redacts.String()).Msg("no Chatwoot message for redacted event")
+		log.Err(err).Stringer("redacts", evt.Redacts).Msg("no Chatwoot message for redacted event")
 		return
 	}
 

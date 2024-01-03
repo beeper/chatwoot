@@ -29,7 +29,7 @@ import (
 )
 
 func SendMessage(ctx context.Context, roomID id.RoomID, content *event.MessageEventContent, extraContent ...map[string]any) (resp *mautrix.RespSendEvent, err error) {
-	log := zerolog.Ctx(ctx).With().Str("room_id", roomID.String()).Logger()
+	log := zerolog.Ctx(ctx).With().Stringer("room_id", roomID).Logger()
 	ctx = log.WithContext(ctx)
 
 	wrappedContent := event.Content{Parsed: content}
@@ -48,7 +48,7 @@ func SendMessage(ctx context.Context, roomID id.RoomID, content *event.MessageEv
 	return r, err
 }
 
-func HandleWebhook(w http.ResponseWriter, r *http.Request) {
+func HandleWebhook(_ http.ResponseWriter, r *http.Request) {
 	log := hlog.FromRequest(r)
 	ctx := log.WithContext(context.Background())
 
@@ -297,7 +297,7 @@ func HandleMessageCreated(ctx context.Context, mc chatwootapi.MessageCreated) er
 			return fmt.Errorf("invalid start new chat response: %s", sncResp.Error)
 		}
 
-		log = log.With().Str("room_id", sncResp.RoomID.String()).Logger()
+		log = log.With().Stringer("room_id", sncResp.RoomID).Logger()
 		log.Info().Msg("created new chat for conversation")
 		roomID = sncResp.RoomID
 
@@ -313,7 +313,7 @@ func HandleMessageCreated(ctx context.Context, mc chatwootapi.MessageCreated) er
 			return err
 		}
 	}
-	log = log.With().Str("room_id", roomID.String()).Logger()
+	log = log.With().Stringer("room_id", roomID).Logger()
 	ctx = log.WithContext(ctx)
 
 	// Acquire the lock, so that we don't have race conditions with the matrix

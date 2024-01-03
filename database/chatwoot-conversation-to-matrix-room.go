@@ -40,7 +40,7 @@ func (store *Database) GetMatrixRoomFromChatwootConversation(ctx context.Context
 func (store *Database) UpdateMostRecentEventIDForRoom(ctx context.Context, roomID id.RoomID, mostRecentEventID id.EventID) error {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "update_most_recent_event_id_for_room").
-		Str("most_recent_event_id", mostRecentEventID.String()).
+		Stringer("most_recent_event_id", mostRecentEventID).
 		Logger()
 	ctx = log.WithContext(ctx)
 
