@@ -2,28 +2,25 @@
   description = "Chatwoot <-> Matrix Help Bot Integration";
 
   inputs = {
-    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs-unstable, flake-utils }:
+  outputs = { self, nixpkgs, flake-utils }:
     (flake-utils.lib.eachDefaultSystem (system:
-      let pkgs = import nixpkgs-unstable { system = system; };
+      let pkgs = import nixpkgs { inherit system; };
       in rec {
         packages.chatwoot = pkgs.buildGoModule {
           pname = "chatwoot";
-          version = "unstable-2023-12-14";
-
-          src = ./.;
-
+          version = "unstable-2024-03-26";
+          src = self;
           propagatedBuildInputs = [ pkgs.olm ];
-
-          vendorHash = "sha256-MYmJf8UlR6IhF5SVEQ9nap1vWFH00TjFjKrmISInXMg=";
+          vendorHash = "sha256-BIymQIs7vYO4JvRrj4cg8VlgsJ+pK/TRftwbYXKJD88=";
         };
         packages.default = packages.chatwoot;
 
         devShells.default = pkgs.mkShell {
-          packages = with pkgs; [ go_1_21 olm pre-commit gotools gopls ];
+          packages = with pkgs; [ go olm pre-commit gotools gopls ];
         };
       }));
 }

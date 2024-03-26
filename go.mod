@@ -1,6 +1,6 @@
 module github.com/beeper/chatwoot
 
-go 1.21
+go 1.22
 
 require (
 	github.com/jackc/pgx/v4 v4.18.3
@@ -15,9 +15,6 @@ require (
 	github.com/rs/xid v1.5.0 // indirect
 	golang.org/x/exp v0.0.0-20240325151524-a685a6edb6d8 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
-)
-
-require (
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgconn v1.14.3 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
