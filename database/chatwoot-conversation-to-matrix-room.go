@@ -3,13 +3,14 @@ package database
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix/id"
 )
 
 func (store *Database) GetChatwootConversationIDFromMatrixRoom(ctx context.Context, roomID id.RoomID) (int, error) {
-	row := store.DB.QueryRowContext(ctx, `
+	row := store.DB.QueryRow(ctx, `
 		SELECT chatwoot_conversation_id
 		  FROM chatwoot_conversation_to_matrix_room
 		 WHERE matrix_room_id = $1`, roomID)
@@ -21,7 +22,7 @@ func (store *Database) GetChatwootConversationIDFromMatrixRoom(ctx context.Conte
 }
 
 func (store *Database) GetMatrixRoomFromChatwootConversation(ctx context.Context, conversationID int) (id.RoomID, id.EventID, error) {
-	row := store.DB.QueryRowContext(ctx, `
+	row := store.DB.QueryRow(ctx, `
 		SELECT matrix_room_id, most_recent_event_id
 		  FROM chatwoot_conversation_to_matrix_room
 		 WHERE chatwoot_conversation_id = $1`, conversationID)
@@ -45,24 +46,17 @@ func (store *Database) UpdateMostRecentEventIDForRoom(ctx context.Context, roomI
 	ctx = log.WithContext(ctx)
 
 	log.Debug().Msg("setting most recent event ID for room")
-	tx, err := store.DB.Begin()
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	update := `
-		UPDATE chatwoot_conversation_to_matrix_room
-		SET most_recent_event_id = $2
-		WHERE matrix_room_id = $1
-	`
-	if _, err := tx.ExecContext(ctx, update, roomID, mostRecentEventID); err != nil {
-		tx.Rollback()
-		log.Err(err).Msg("failed to update most recent event ID")
-		return err
-	}
-
-	return tx.Commit()
+	return store.DB.DoTxn(ctx, nil, func(ctx context.Context) error {
+		update := `
+			UPDATE chatwoot_conversation_to_matrix_room
+			SET most_recent_event_id = $2
+			WHERE matrix_room_id = $1
+		`
+		if _, err := store.DB.Exec(ctx, update, roomID, mostRecentEventID); err != nil {
+			return fmt.Errorf("failed to update most recent event ID: %w", err)
+		}
+		return nil
+	})
 }
 
 func (store *Database) UpdateConversationIDForRoom(ctx context.Context, roomID id.RoomID, conversationID int) error {
@@ -73,22 +67,14 @@ func (store *Database) UpdateConversationIDForRoom(ctx context.Context, roomID i
 	ctx = log.WithContext(ctx)
 
 	log.Debug().Msg("setting conversation ID for room")
-	tx, err := store.DB.Begin()
-	if err != nil {
-		tx.Rollback()
+	return store.DB.DoTxn(ctx, nil, func(ctx context.Context) error {
+		upsert := `
+			INSERT INTO chatwoot_conversation_to_matrix_room (matrix_room_id, chatwoot_conversation_id)
+				VALUES ($1, $2)
+			ON CONFLICT (matrix_room_id) DO UPDATE
+				SET chatwoot_conversation_id = $2
+		`
+		_, err := store.DB.Exec(ctx, upsert, roomID, conversationID)
 		return err
-	}
-
-	upsert := `
-		INSERT INTO chatwoot_conversation_to_matrix_room (matrix_room_id, chatwoot_conversation_id)
-			VALUES ($1, $2)
-		ON CONFLICT (matrix_room_id) DO UPDATE
-			SET chatwoot_conversation_id = $2
-	`
-	if _, err := tx.ExecContext(ctx, upsert, roomID, conversationID); err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	return tx.Commit()
+	})
 }

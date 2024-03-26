@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/sqlstatestore"
@@ -46,7 +45,7 @@ func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMX
 		contactName := ""
 		if strings.HasPrefix(contactMXID.Localpart(), "twitter_") {
 			memberEventContent := map[string]any{}
-			if err := client.StateEvent(roomID, event.StateMember, contactMXID.String(), &memberEventContent); err == nil {
+			if err := client.StateEvent(ctx, roomID, event.StateMember, contactMXID.String(), &memberEventContent); err == nil {
 				log.Trace().Interface("member_event_content", memberEventContent).Msg("Got member event content")
 				if identifiers, ok := memberEventContent["com.beeper.bridge.identifiers"]; ok {
 					if identifiersList, ok := identifiers.([]any); ok {
@@ -82,7 +81,7 @@ func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMX
 		return 0, err
 	}
 
-	_, err = client.SendStateEvent(roomID, chatwootConversationIDType, "", ChatwootConversationIDEventContent{
+	_, err = client.SendStateEvent(ctx, roomID, chatwootConversationIDType, "", ChatwootConversationIDEventContent{
 		ConversationID: conversation.ID,
 	})
 	if err != nil {
@@ -92,7 +91,7 @@ func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMX
 	// Detect if this is the canonical DM
 	if configuration.CanonicalDMPrefix != "" {
 		var roomNameEvent event.RoomNameEventContent
-		err = client.StateEvent(roomID, event.StateRoomName, "", &roomNameEvent)
+		err = client.StateEvent(ctx, roomID, event.StateRoomName, "", &roomNameEvent)
 		if err == nil {
 			if strings.HasPrefix(roomNameEvent.Name, configuration.CanonicalDMPrefix) {
 				go func() {
@@ -160,69 +159,10 @@ func GetCustomAttrForDevice(ctx context.Context, evt *event.Event) (string, stri
 	return clientTypeString, clientVersionString
 }
 
-var deviceVersionRegex = regexp.MustCompile(`(\S+)( \(last updated at .*\))?`)
-
-func HandleBeeperClientInfo(ctx context.Context, evt *event.Event) error {
-	log := zerolog.Ctx(ctx).With().
-		Str("component", "handle_beeper_client_info").
-		Stringer("room_id", evt.RoomID).
-		Stringer("event_id", evt.ID).
-		Logger()
-	ctx = log.WithContext(ctx)
-
-	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, evt.RoomID)
-	if err != nil {
-		return err
-	}
-	log = log.With().Int("conversation_id", conversationID).Logger()
-
-	deviceTypeKey, deviceVersion := GetCustomAttrForDevice(ctx, evt)
-	if deviceTypeKey != "" && deviceVersion != "" {
-		conv, err := chatwootAPI.GetChatwootConversation(conversationID)
-		if err != nil {
-			log.Err(err).Msg("failed to get Chatwoot conversation")
-			return err
-		}
-		customAttrs := conv.CustomAttributes
-		currentDeviceVersion := customAttrs[deviceTypeKey]
-
-		version := deviceVersionRegex.FindStringSubmatch(customAttrs[deviceTypeKey])
-		if version != nil {
-			currentDeviceVersion = version[1]
-		}
-
-		if currentDeviceVersion != deviceVersion {
-			now := time.Now().Format("2006-01-02 15:04:05 UTC")
-			versionWithLastUpdated := fmt.Sprintf("%s (last updated at %s)", deviceVersion, now)
-			customAttrs[deviceTypeKey] = versionWithLastUpdated
-
-			log = log.With().
-				Str("device_type", deviceTypeKey).
-				Str("device_version", deviceVersion).
-				Str("last_updated", now).
-				Logger()
-
-			log.Debug().Msg("setting device custom attribute on conversation")
-
-			err := chatwootAPI.SetConversationCustomAttributes(conversationID, customAttrs)
-			if err != nil {
-				log.Err(err).Msg("failed to set device custom attribute on conversation")
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
 var rageshakeIssueRegex = regexp.MustCompile(`[A-Z]{1,5}-\d+`)
 
-func HandleMessage(ctx context.Context, _ mautrix.EventSource, evt *event.Event) {
-	log := zerolog.Ctx(ctx).With().
-		Str("component", "handle_message").
-		Stringer("room_id", evt.RoomID).
-		Stringer("event_id", evt.ID).
-		Logger()
+func HandleMessage(ctx context.Context, evt *event.Event) {
+	log := zerolog.Ctx(ctx).With().Str("component", "handle_message").Logger()
 	ctx = log.WithContext(ctx)
 
 	// Acquire the lock, so that we don't have race conditions with the
@@ -290,7 +230,10 @@ func GetOrCreateChatwootConversation(ctx context.Context, roomID id.RoomID, evt 
 	}
 
 	for i := 0; i < 2; i++ {
-		joinedMembers := client.StateStore.(*sqlstatestore.SQLStateStore).GetRoomMembers(roomID, event.MembershipJoin)
+		joinedMembers, err := client.StateStore.(*sqlstatestore.SQLStateStore).GetRoomMembers(ctx, roomID, event.MembershipJoin)
+		if err != nil {
+			return -1, fmt.Errorf("failed to get joined members for room %s: %w", roomID, err)
+		}
 		memberCount := len(joinedMembers)
 
 		if configuration.BridgeIfMembersLessThan >= 0 && memberCount >= configuration.BridgeIfMembersLessThan {
@@ -312,7 +255,7 @@ func GetOrCreateChatwootConversation(ctx context.Context, roomID id.RoomID, evt 
 				// TODO: this is a hack because sometimes the database state is not
 				// correct. We re-fetch the joined members from the server to get
 				// an updated set of users.
-				membersResp, err := client.JoinedMembers(roomID)
+				membersResp, err := client.JoinedMembers(ctx, roomID)
 				if err != nil {
 					return -1, fmt.Errorf("failed to get joined members to verify if this conversation is a non-DM room: %w", err)
 				}
@@ -320,7 +263,7 @@ func GetOrCreateChatwootConversation(ctx context.Context, roomID id.RoomID, evt 
 				if len(membersResp.Joined) == 1 {
 					// Only the bot is in the room, leave it
 					log.Warn().Msg("leaving room because it was a non-DM room with only the bot in it")
-					client.LeaveRoom(roomID)
+					client.LeaveRoom(ctx, roomID)
 					break
 				}
 				continue
@@ -341,7 +284,7 @@ func GetOrCreateChatwootConversation(ctx context.Context, roomID id.RoomID, evt 
 	return -1, fmt.Errorf("failed to create Chatwoot conversation for room %s", roomID)
 }
 
-func HandleReaction(ctx context.Context, _ mautrix.EventSource, evt *event.Event) {
+func HandleReaction(ctx context.Context, evt *event.Event) {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "handle_reaction").
 		Stringer("room_id", evt.RoomID).
@@ -373,7 +316,7 @@ func HandleReaction(ctx context.Context, _ mautrix.EventSource, evt *event.Event
 
 	cm, err := DoRetry(ctx, fmt.Sprintf("send notification of reaction to %d", conversationID), func(context.Context) (*chatwootapi.Message, error) {
 		reaction := evt.Content.AsReaction()
-		reactedEvent, err := client.GetEvent(evt.RoomID, reaction.RelatesTo.EventID)
+		reactedEvent, err := client.GetEvent(ctx, evt.RoomID, reaction.RelatesTo.EventID)
 		if err != nil {
 			return nil, fmt.Errorf("couldn't find reacted to event %s: %w", reaction.RelatesTo.EventID, err)
 		}
@@ -384,7 +327,7 @@ func HandleReaction(ctx context.Context, _ mautrix.EventSource, evt *event.Event
 				return nil, err
 			}
 
-			decryptedEvent, err := client.Crypto.Decrypt(reactedEvent)
+			decryptedEvent, err := client.Crypto.Decrypt(ctx, reactedEvent)
 			if err != nil {
 				return nil, err
 			}
@@ -430,7 +373,7 @@ func downloadAndDecryptMedia(ctx context.Context, content *event.MessageEventCon
 		return nil, fmt.Errorf("malformed content URL: %w", err)
 	}
 
-	data, err := client.DownloadBytes(mxc)
+	data, err := client.DownloadBytes(ctx, mxc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download media: %w", err)
 	}
@@ -551,7 +494,7 @@ func HandleMatrixMessageContent(ctx context.Context, evt *event.Event, conversat
 	}
 }
 
-func HandleRedaction(ctx context.Context, _ mautrix.EventSource, evt *event.Event) {
+func HandleRedaction(ctx context.Context, evt *event.Event) {
 	log := zerolog.Ctx(ctx).With().
 		Stringer("room_id", evt.RoomID).
 		Stringer("event_id", evt.ID).

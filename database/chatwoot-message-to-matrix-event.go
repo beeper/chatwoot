@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
@@ -16,23 +17,17 @@ func (store *Database) SetChatwootMessageIDForMatrixEvent(ctx context.Context, e
 	ctx = log.WithContext(ctx)
 
 	log.Debug().Msg("setting chatwoot message ID for matrix event")
-	tx, err := store.DB.Begin()
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	insert := `
-		INSERT INTO chatwoot_message_to_matrix_event (matrix_event_id, chatwoot_message_id)
-			VALUES ($1, $2)
-	`
-	if _, err := tx.ExecContext(ctx, insert, eventID, chatwootMessageID); err != nil {
-		log.Err(err).Msg("failed to set chatwoot message ID for matrix event")
-		tx.Rollback()
-		return err
-	}
-
-	return tx.Commit()
+	return store.DB.DoTxn(ctx, nil, func(ctx context.Context) error {
+		insert := `
+			INSERT INTO chatwoot_message_to_matrix_event (matrix_event_id, chatwoot_message_id)
+				VALUES ($1, $2)
+		`
+		_, err := store.DB.Exec(ctx, insert, eventID, chatwootMessageID)
+		if err != nil {
+			return fmt.Errorf("failed to insert chatwoot message ID for matrix event: %w", err)
+		}
+		return nil
+	})
 }
 
 func (store *Database) GetMatrixEventIDsForChatwootMessage(ctx context.Context, chatwootMessageID int) []id.EventID {
@@ -40,7 +35,7 @@ func (store *Database) GetMatrixEventIDsForChatwootMessage(ctx context.Context, 
 	ctx = log.WithContext(ctx)
 
 	log.Debug().Msg("getting Matrix event IDs for chatwoot message")
-	rows, err := store.DB.QueryContext(ctx, `
+	rows, err := store.DB.Query(ctx, `
 		SELECT matrix_event_id
 		  FROM chatwoot_message_to_matrix_event
 		 WHERE chatwoot_message_id = $1`, chatwootMessageID)
@@ -65,7 +60,7 @@ func (store *Database) GetChatwootMessageIDsForMatrixEventID(ctx context.Context
 
 	log.Debug().Msg("getting chatwoot message IDs for matrix event ID")
 	var rows dbutil.Rows
-	rows, err = store.DB.QueryContext(ctx, `
+	rows, err = store.DB.Query(ctx, `
 		SELECT chatwoot_message_id
 		  FROM chatwoot_message_to_matrix_event
 		 WHERE matrix_event_id = $1`, matrixEventID)

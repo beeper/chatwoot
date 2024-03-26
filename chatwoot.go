@@ -83,9 +83,18 @@ func main() {
 		globallog.Fatal().Err(err).Msg("Failed to compile logging configuration")
 	}
 
-	log.Info().Interface("configuration", configuration).Msg("Config loaded")
+	getLogger := func(evt *event.Event) zerolog.Logger {
+		return log.With().
+			Stringer("event_type", &evt.Type).
+			Stringer("sender", evt.Sender).
+			Str("room_id", string(evt.RoomID)).
+			Str("event_id", string(evt.ID)).
+			Logger()
+	}
 
+	log.Info().Interface("configuration", configuration).Msg("Config loaded")
 	log.Info().Msg("Chatwoot service starting...")
+	ctx := log.WithContext(context.TODO())
 
 	// Open the chatwoot database
 	db, err := dbutil.NewFromConfig("chatwoot", configuration.Database, dbutil.ZeroLogger(*log))
@@ -97,7 +106,7 @@ func main() {
 	roomSendlocks = map[id.RoomID]*sync.Mutex{}
 
 	stateStore = database.NewDatabase(db)
-	if err := stateStore.DB.Upgrade(); err != nil {
+	if err := stateStore.DB.Upgrade(ctx); err != nil {
 		log.Fatal().Err(err).Msg("failed to upgrade the Chatwoot database")
 	}
 
@@ -117,15 +126,6 @@ func main() {
 		configuration.ChatwootInboxID,
 		accessToken,
 	)
-
-	getLogger := func(evt *event.Event) zerolog.Logger {
-		return log.With().
-			Stringer("event_type", &evt.Type).
-			Stringer("sender", evt.Sender).
-			Str("room_id", string(evt.RoomID)).
-			Str("event_id", string(evt.ID)).
-			Logger()
-	}
 
 	cryptoHelper, err := cryptohelper.NewCryptoHelper(client, []byte("chatwoot_cryptostore_key"), db)
 	if err != nil {
@@ -165,42 +165,44 @@ func main() {
 		})
 	}
 
-	err = cryptoHelper.Init()
+	err = cryptoHelper.Init(ctx)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize crypto helper")
 	}
 	cryptoHelper.Machine().AllowKeyShare = AllowKeyShare
 	client.Crypto = cryptoHelper
 
+	addEvtContext := func(ctx context.Context, evt *event.Event) context.Context {
+		return zerolog.Ctx(ctx).With().
+			Stringer("event_type", &evt.Type).
+			Stringer("sender", evt.Sender).
+			Str("room_id", string(evt.RoomID)).
+			Str("event_id", string(evt.ID)).
+			Logger().
+			WithContext(ctx)
+	}
 	syncer := client.Syncer.(*mautrix.DefaultSyncer)
-	syncer.OnEventType(event.EventMessage, func(source mautrix.EventSource, evt *event.Event) {
-		log := getLogger(evt)
-		ctx := log.WithContext(context.TODO())
-
+	syncer.OnEventType(event.EventMessage, func(ctx context.Context, evt *event.Event) {
+		ctx = addEvtContext(ctx, evt)
 		stateStore.UpdateMostRecentEventIDForRoom(ctx, evt.RoomID, evt.ID)
 		if VerifyFromAuthorizedUser(ctx, evt.Sender) {
-			go HandleBeeperClientInfo(ctx, evt)
-			go HandleMessage(ctx, source, evt)
+			go HandleMessage(ctx, evt)
 		}
 	})
-	syncer.OnEventType(event.EventReaction, func(source mautrix.EventSource, evt *event.Event) {
-		log := getLogger(evt)
-		ctx := log.WithContext(context.TODO())
+	syncer.OnEventType(event.EventReaction, func(ctx context.Context, evt *event.Event) {
+		ctx = addEvtContext(ctx, evt)
 
 		stateStore.UpdateMostRecentEventIDForRoom(ctx, evt.RoomID, evt.ID)
 		if VerifyFromAuthorizedUser(ctx, evt.Sender) {
-			go HandleBeeperClientInfo(ctx, evt)
-			go HandleReaction(ctx, source, evt)
+			go HandleReaction(ctx, evt)
 		}
 	})
-	syncer.OnEventType(event.EventRedaction, func(source mautrix.EventSource, evt *event.Event) {
-		log := getLogger(evt)
-		ctx := log.WithContext(context.TODO())
+	syncer.OnEventType(event.EventRedaction, func(ctx context.Context, evt *event.Event) {
+		ctx = addEvtContext(ctx, evt)
 
 		stateStore.UpdateMostRecentEventIDForRoom(ctx, evt.RoomID, evt.ID)
 		if VerifyFromAuthorizedUser(ctx, evt.Sender) {
-			go HandleBeeperClientInfo(ctx, evt)
-			go HandleRedaction(ctx, source, evt)
+			go HandleRedaction(ctx, evt)
 		}
 	})
 
@@ -232,7 +234,7 @@ func main() {
 
 			log.Info().Msg("starting to create conversations for rooms that don't have a conversation yet")
 
-			joined, err := client.JoinedRooms()
+			joined, err := client.JoinedRooms(ctx)
 			if err != nil {
 				log.Fatal().Err(err).Msg("Failed to get joined rooms")
 			}
@@ -253,7 +255,7 @@ func main() {
 					// If we already have a Chatwoot conversation, make sure that
 					// the room has a state event with the Chatwoot conversation
 					// ID.
-					_, err = client.SendStateEvent(roomID, chatwootConversationIDType, "", ChatwootConversationIDEventContent{
+					_, err = client.SendStateEvent(ctx, roomID, chatwootConversationIDType, "", ChatwootConversationIDEventContent{
 						ConversationID: chatwootConversationID,
 					})
 					if err != nil {
@@ -308,7 +310,7 @@ func backfillConversationForRoom(ctx context.Context, roomID id.RoomID) error {
 
 	log.Info().Msg("Creating conversation for room")
 
-	messages, err := client.Messages(roomID, "", "", mautrix.DirectionBackward, nil, 50)
+	messages, err := client.Messages(ctx, roomID, "", "", mautrix.DirectionBackward, nil, 50)
 	if err != nil {
 		log.Err(err).Msg("Failed to get messages for room")
 		return err

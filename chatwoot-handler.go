@@ -38,7 +38,7 @@ func SendMessage(ctx context.Context, roomID id.RoomID, content *event.MessageEv
 	}
 
 	r, err := DoRetry(ctx, "send message to "+roomID.String(), func(ctx context.Context) (*mautrix.RespSendEvent, error) {
-		return client.SendMessageEvent(roomID, event.EventMessage, &wrappedContent)
+		return client.SendMessageEvent(ctx, roomID, event.EventMessage, &wrappedContent)
 	})
 	if err != nil {
 		// give up
@@ -161,8 +161,8 @@ func handleAttachment(ctx context.Context, roomID id.RoomID, chatwootMessageID i
 		info.ThumbnailFile.EncryptInPlace(thumbnailData)
 
 		// Upload the thumbnail
-		uploadedThumbnail, err := DoRetry(ctx, "upload thumbnail to Matrix", func(context.Context) (*mautrix.RespMediaUpload, error) {
-			return client.UploadMedia(mautrix.ReqUploadMedia{
+		uploadedThumbnail, err := DoRetry(ctx, "upload thumbnail to Matrix", func(ctx context.Context) (*mautrix.RespMediaUpload, error) {
+			return client.UploadMedia(ctx, mautrix.ReqUploadMedia{
 				ContentBytes:  thumbnailData,
 				ContentLength: int64(len(thumbnailData)),
 				ContentType:   "application/octet-stream",
@@ -197,8 +197,8 @@ func handleAttachment(ctx context.Context, roomID id.RoomID, chatwootMessageID i
 	}
 
 	// Upload it to the media repo
-	uploaded, err := DoRetry(ctx, fmt.Sprintf("upload %s to Matrix", filename), func(context.Context) (*mautrix.RespMediaUpload, error) {
-		return client.UploadMedia(mautrix.ReqUploadMedia{
+	uploaded, err := DoRetry(ctx, fmt.Sprintf("upload %s to Matrix", filename), func(ctx context.Context) (*mautrix.RespMediaUpload, error) {
+		return client.UploadMedia(ctx, mautrix.ReqUploadMedia{
 			ContentBytes:  attachmentData,
 			ContentLength: int64(len(attachmentData)),
 			ContentType:   "application/octet-stream",
@@ -307,7 +307,7 @@ func HandleMessageCreated(ctx context.Context, mc chatwootapi.MessageCreated) er
 			return err
 		}
 
-		_, err = client.State(sncResp.RoomID)
+		_, err = client.State(ctx, sncResp.RoomID)
 		if err != nil {
 			log.Err(err).Msg("failed to get room state")
 			return err
@@ -334,13 +334,13 @@ func HandleMessageCreated(ctx context.Context, mc chatwootapi.MessageCreated) er
 		log.Info().Int("message_id", mc.ID).Msg("message deleted")
 		var errs []error
 		for _, eventID := range eventIDs {
-			event, err := client.GetEvent(roomID, eventID)
+			event, err := client.GetEvent(ctx, roomID, eventID)
 			if err == nil && event.Unsigned.RedactedBecause != nil {
 				// Already redacted
 				log.Info().Int("message_id", mc.ID).Msg("message was already redacted")
 				continue
 			}
-			_, err = client.RedactEvent(roomID, eventID)
+			_, err = client.RedactEvent(ctx, roomID, eventID)
 			if err != nil {
 				errs = append(errs, err)
 			}
