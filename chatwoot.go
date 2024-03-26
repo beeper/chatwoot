@@ -353,7 +353,7 @@ func AllowKeyShare(ctx context.Context, device *id.Device, info event.RequestedK
 	}
 	log = log.With().Int("conversation_id", conversationID).Logger()
 
-	conversation, err := chatwootAPI.GetChatwootConversation(conversationID)
+	conversation, err := chatwootAPI.GetChatwootConversation(ctx, conversationID)
 	if err != nil {
 		log.Info().Err(err).Msg("couldn't get Chatwoot conversation")
 		return &crypto.KeyShareRejectNoResponse

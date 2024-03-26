@@ -69,7 +69,7 @@ func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMX
 	log = log.With().Int("contact_id", contactID).Logger()
 
 	log.Info().Msg("creating Chatwoot conversation")
-	conversation, err := chatwootAPI.CreateConversation(roomID.String(), contactID, customAttrs)
+	conversation, err := chatwootAPI.CreateConversation(ctx, roomID.String(), contactID, customAttrs)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create chatwoot conversation for %s: %w", roomID, err)
 	}
@@ -100,7 +100,7 @@ func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMX
 					time.Sleep(30 * time.Second)
 					log.Info().Msg("Adding canonical-dm label to conversation")
 
-					labels, err := chatwootAPI.GetConversationLabels(conversation.ID)
+					labels, err := chatwootAPI.GetConversationLabels(ctx, conversation.ID)
 					if err != nil {
 						log.Err(err).Msg("Failed to list conversation labels")
 					}
@@ -108,7 +108,7 @@ func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMX
 					labels = append(labels, "canonical-dm")
 
 					log.Info().Strs("labels", labels).Msg("Setting conversation labels")
-					err = chatwootAPI.SetConversationLabels(conversation.ID, labels)
+					err = chatwootAPI.SetConversationLabels(ctx, conversation.ID, labels)
 					if err != nil {
 						log.Err(err).Msg("failed to add canonical-dm label to conversation")
 					}
@@ -436,7 +436,7 @@ func HandleMatrixMessageContent(ctx context.Context, evt *event.Event, conversat
 			mimeType = content.Info.MimeType
 		}
 
-		cm, err := chatwootAPI.SendAttachmentMessage(conversationID, filename, mimeType, bytes.NewReader(data), messageType)
+		cm, err := chatwootAPI.SendAttachmentMessage(ctx, conversationID, filename, mimeType, bytes.NewReader(data), messageType)
 		if err != nil {
 			return nil, fmt.Errorf("failed to send attachment message. Error: %w", err)
 		}
@@ -471,7 +471,7 @@ func HandleMatrixMessageContent(ctx context.Context, evt *event.Event, conversat
 				mimeType = part.Info.MimeType
 			}
 
-			cm, err := chatwootAPI.SendAttachmentMessage(conversationID, filename, mimeType, bytes.NewReader(data), messageType)
+			cm, err := chatwootAPI.SendAttachmentMessage(ctx, conversationID, filename, mimeType, bytes.NewReader(data), messageType)
 			if err != nil {
 				return nil, fmt.Errorf("failed to send attachment message. Error: %w", err)
 			}
@@ -525,7 +525,7 @@ func HandleRedaction(ctx context.Context, evt *event.Event) {
 	}
 
 	for _, messageID := range messageIDs {
-		err = chatwootAPI.DeleteMessage(conversationID, messageID)
+		err = chatwootAPI.DeleteMessage(ctx, conversationID, messageID)
 		if err != nil {
 			log.Err(err).Msg("failed to delete Chatwoot message")
 		}

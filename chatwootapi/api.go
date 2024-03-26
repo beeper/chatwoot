@@ -65,7 +65,7 @@ func (api *ChatwootAPI) DoRequest(req *http.Request) (*http.Response, error) {
 	return api.Client.Do(req)
 }
 
-func (api *ChatwootAPI) MakeUri(endpoint string) string {
+func (api *ChatwootAPI) MakeURI(endpoint string) string {
 	url, err := url.Parse(api.BaseURL)
 	if err != nil {
 		panic(err)
@@ -97,7 +97,7 @@ func (api *ChatwootAPI) CreateContact(ctx context.Context, userID id.UserID, nam
 		Identifier: name,
 	}
 	jsonValue, _ := json.Marshal(payload)
-	req, err := http.NewRequest(http.MethodPost, api.MakeUri("contacts"), bytes.NewBuffer(jsonValue))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, api.MakeURI("contacts"), bytes.NewBuffer(jsonValue))
 	if err != nil {
 		log.Err(err).Msg("Failed to create request")
 		return 0, err
@@ -140,7 +140,7 @@ func (api *ChatwootAPI) ContactIDForMXID(ctx context.Context, userID id.UserID) 
 
 	log.Info().Str("query", query).Msg("Searching for contact")
 
-	req, err := http.NewRequest(http.MethodGet, api.MakeUri("contacts/search"), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, api.MakeURI("contacts/search"), nil)
 	if err != nil {
 		return 0, err
 	}
@@ -175,8 +175,8 @@ func (api *ChatwootAPI) ContactIDForMXID(ctx context.Context, userID id.UserID) 
 	return 0, fmt.Errorf("couldn't find user with user ID %s", query)
 }
 
-func (api *ChatwootAPI) GetChatwootConversation(conversationID int) (*Conversation, error) {
-	req, err := http.NewRequest(http.MethodGet, api.MakeUri(fmt.Sprintf("conversations/%d", conversationID)), nil)
+func (api *ChatwootAPI) GetChatwootConversation(ctx context.Context, conversationID int) (*Conversation, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, api.MakeURI(fmt.Sprintf("conversations/%d", conversationID)), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +194,7 @@ func (api *ChatwootAPI) GetChatwootConversation(conversationID int) (*Conversati
 	return &conversation, err
 }
 
-func (api *ChatwootAPI) CreateConversation(sourceID string, contactID int, additionalAttrs map[string]string) (*Conversation, error) {
+func (api *ChatwootAPI) CreateConversation(ctx context.Context, sourceID string, contactID int, additionalAttrs map[string]string) (*Conversation, error) {
 	values := map[string]any{
 		"source_id":             sourceID,
 		"inbox_id":              api.InboxID,
@@ -203,7 +203,7 @@ func (api *ChatwootAPI) CreateConversation(sourceID string, contactID int, addit
 		"additional_attributes": additionalAttrs,
 	}
 	jsonValue, _ := json.Marshal(values)
-	req, err := http.NewRequest(http.MethodPost, api.MakeUri("conversations"), bytes.NewBuffer(jsonValue))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, api.MakeURI("conversations"), bytes.NewBuffer(jsonValue))
 	if err != nil {
 		return nil, err
 	}
@@ -222,8 +222,8 @@ func (api *ChatwootAPI) CreateConversation(sourceID string, contactID int, addit
 	return &conversation, err
 }
 
-func (api *ChatwootAPI) GetConversationLabels(conversationID int) ([]string, error) {
-	req, err := http.NewRequest(http.MethodGet, api.MakeUri(fmt.Sprintf("conversations/%d/labels", conversationID)), nil)
+func (api *ChatwootAPI) GetConversationLabels(ctx context.Context, conversationID int) ([]string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, api.MakeURI(fmt.Sprintf("conversations/%d/labels", conversationID)), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -242,12 +242,12 @@ func (api *ChatwootAPI) GetConversationLabels(conversationID int) ([]string, err
 	return labels.Payload, err
 }
 
-func (api *ChatwootAPI) SetConversationLabels(conversationID int, labels []string) error {
+func (api *ChatwootAPI) SetConversationLabels(ctx context.Context, conversationID int, labels []string) error {
 	jsonValue, err := json.Marshal(map[string]any{"labels": labels})
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest(http.MethodPost, api.MakeUri(fmt.Sprintf("conversations/%d/labels", conversationID)), bytes.NewBuffer(jsonValue))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, api.MakeURI(fmt.Sprintf("conversations/%d/labels", conversationID)), bytes.NewBuffer(jsonValue))
 	if err != nil {
 		return err
 	}
@@ -269,7 +269,7 @@ func (api *ChatwootAPI) doSendTextMessage(ctx context.Context, conversationID in
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequest(http.MethodPost, api.MakeUri(fmt.Sprintf("conversations/%d/messages", conversationID)), bytes.NewBuffer(jsonValue))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, api.MakeURI(fmt.Sprintf("conversations/%d/messages", conversationID)), bytes.NewBuffer(jsonValue))
 	if err != nil {
 		log.Err(err).Msg("Failed to create request")
 		return nil, err
@@ -306,7 +306,7 @@ func (api *ChatwootAPI) ToggleStatus(ctx context.Context, conversationID int, st
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest(http.MethodPost, api.MakeUri(fmt.Sprintf("conversations/%d/toggle_status", conversationID)), bytes.NewBuffer(jsonValue))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, api.MakeURI(fmt.Sprintf("conversations/%d/toggle_status", conversationID)), bytes.NewBuffer(jsonValue))
 	if err != nil {
 		return err
 	}
@@ -323,7 +323,7 @@ func (api *ChatwootAPI) ToggleStatus(ctx context.Context, conversationID int, st
 
 var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
 
-func (api *ChatwootAPI) SendAttachmentMessage(conversationID int, filename string, mimeType string, fileData io.Reader, messageType MessageType) (*Message, error) {
+func (api *ChatwootAPI) SendAttachmentMessage(ctx context.Context, conversationID int, filename string, mimeType string, fileData io.Reader, messageType MessageType) (*Message, error) {
 	bodyBuf := &bytes.Buffer{}
 	bodyWriter := multipart.NewWriter(bodyBuf)
 
@@ -364,7 +364,7 @@ func (api *ChatwootAPI) SendAttachmentMessage(conversationID int, filename strin
 
 	bodyWriter.Close()
 
-	req, err := http.NewRequest(http.MethodPost, api.MakeUri(fmt.Sprintf("conversations/%d/messages", conversationID)), bodyBuf)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, api.MakeURI(fmt.Sprintf("conversations/%d/messages", conversationID)), bodyBuf)
 	if err != nil {
 		return nil, err
 	}
@@ -391,7 +391,7 @@ func (api *ChatwootAPI) SendAttachmentMessage(conversationID int, filename strin
 
 func (api *ChatwootAPI) DownloadAttachment(ctx context.Context, url string) ([]byte, error) {
 	log := zerolog.Ctx(ctx)
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.Err(err).Msg("failed to create request")
 		return nil, err
@@ -413,8 +413,8 @@ func (api *ChatwootAPI) DownloadAttachment(ctx context.Context, url string) ([]b
 	return data, err
 }
 
-func (api *ChatwootAPI) DeleteMessage(conversationID int, messageID int) error {
-	req, err := http.NewRequest(http.MethodDelete, api.MakeUri(fmt.Sprintf("conversations/%d/messages/%d", conversationID, messageID)), nil)
+func (api *ChatwootAPI) DeleteMessage(ctx context.Context, conversationID int, messageID int) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, api.MakeURI(fmt.Sprintf("conversations/%d/messages/%d", conversationID, messageID)), nil)
 	if err != nil {
 		return err
 	}
