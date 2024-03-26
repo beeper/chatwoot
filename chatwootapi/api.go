@@ -74,7 +74,7 @@ func (api *ChatwootAPI) MakeURI(endpoint string) string {
 	return url.String()
 }
 
-func (api *ChatwootAPI) CreateContact(ctx context.Context, userID id.UserID, name string) (int, error) {
+func (api *ChatwootAPI) CreateContact(ctx context.Context, userID id.UserID, name string) (ContactID, error) {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "create_contact").
 		Stringer("user_id", userID).
@@ -125,7 +125,7 @@ func (api *ChatwootAPI) CreateContact(ctx context.Context, userID id.UserID, nam
 	return contactPayload.Payload.Contact.ID, nil
 }
 
-func (api *ChatwootAPI) ContactIDForMXID(ctx context.Context, userID id.UserID) (int, error) {
+func (api *ChatwootAPI) ContactIDForMXID(ctx context.Context, userID id.UserID) (ContactID, error) {
 	log := zerolog.Ctx(ctx)
 	query := userID.String()
 	if userID.Homeserver() == "beeper.local" {
@@ -194,7 +194,7 @@ func (api *ChatwootAPI) GetChatwootConversation(ctx context.Context, conversatio
 	return &conversation, err
 }
 
-func (api *ChatwootAPI) CreateConversation(ctx context.Context, sourceID string, contactID int, additionalAttrs map[string]string) (*Conversation, error) {
+func (api *ChatwootAPI) CreateConversation(ctx context.Context, sourceID string, contactID ContactID, additionalAttrs map[string]string) (*Conversation, error) {
 	values := map[string]any{
 		"source_id":             sourceID,
 		"inbox_id":              api.InboxID,

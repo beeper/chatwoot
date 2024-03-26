@@ -63,10 +63,10 @@ func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMX
 		if err != nil {
 			return 0, fmt.Errorf("create contact failed for %s: %w", contactMXID, err)
 		}
-		log.Info().Int("contact_id", contactID).Msg("Contact created")
+		log.Info().Int("contact_id", int(contactID)).Msg("Contact created")
 	}
 
-	log = log.With().Int("contact_id", contactID).Logger()
+	log = log.With().Int("contact_id", int(contactID)).Logger()
 
 	log.Info().Msg("creating Chatwoot conversation")
 	conversation, err := chatwootAPI.CreateConversation(ctx, roomID.String(), contactID, customAttrs)

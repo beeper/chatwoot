@@ -358,7 +358,7 @@ func AllowKeyShare(ctx context.Context, device *id.Device, info event.RequestedK
 		log.Info().Err(err).Msg("couldn't get Chatwoot conversation")
 		return &crypto.KeyShareRejectNoResponse
 	}
-	log = log.With().Int("sender_identifier", conversation.Meta.Sender.ID).Logger()
+	log = log.With().Int("sender_identifier", int(conversation.Meta.Sender.ID)).Logger()
 
 	// This is the user that we expected for this Chatwoot conversation.
 	if conversation.Meta.Sender.Identifier == device.UserID.String() {
