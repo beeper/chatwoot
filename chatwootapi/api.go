@@ -35,14 +35,14 @@ const (
 
 type ChatwootAPI struct {
 	BaseURL     string
-	AccountID   int
-	InboxID     int
+	AccountID   AccountID
+	InboxID     InboxID
 	AccessToken string
 
 	Client *http.Client
 }
 
-func CreateChatwootAPI(baseURL string, accountID int, inboxID int, accessToken string) *ChatwootAPI {
+func CreateChatwootAPI(baseURL string, accountID AccountID, inboxID InboxID, accessToken string) *ChatwootAPI {
 	return &ChatwootAPI{
 		BaseURL:     baseURL,
 		AccountID:   accountID,

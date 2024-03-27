@@ -8,6 +8,8 @@ import (
 	"go.mau.fi/util/dbutil"
 	"go.mau.fi/zeroconfig"
 	"maunium.net/go/mautrix/id"
+
+	"github.com/beeper/chatwoot/chatwootapi"
 )
 
 type BackfillConfiguration struct {
@@ -33,10 +35,10 @@ type Configuration struct {
 	PasswordFile string    `yaml:"password_file"`
 
 	// Chatwoot Authentication
-	ChatwootBaseUrl         string `yaml:"chatwoot_base_url"`
-	ChatwootAccessTokenFile string `yaml:"chatwoot_access_token_file"`
-	ChatwootAccountID       int    `yaml:"chatwoot_account_id"`
-	ChatwootInboxID         int    `yaml:"chatwoot_inbox_id"`
+	ChatwootBaseUrl         string                `yaml:"chatwoot_base_url"`
+	ChatwootAccessTokenFile string                `yaml:"chatwoot_access_token_file"`
+	ChatwootAccountID       chatwootapi.AccountID `yaml:"chatwoot_account_id"`
+	ChatwootInboxID         chatwootapi.InboxID   `yaml:"chatwoot_inbox_id"`
 
 	// Database settings
 	Database dbutil.Config `yaml:"database"`
