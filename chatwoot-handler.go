@@ -90,7 +90,7 @@ func HandleWebhook(_ http.ResponseWriter, r *http.Request) {
 func handleAttachment(ctx context.Context, roomID id.RoomID, chatwootMessageID chatwootapi.MessageID, chatwootAttachment chatwootapi.Attachment) (*mautrix.RespSendEvent, error) {
 	log := zerolog.Ctx(ctx).With().
 		Str("func", "handleAttachment").
-		Int("attachment_id", chatwootAttachment.ID).
+		Int("attachment_id", int(chatwootAttachment.ID)).
 		Str("attachment_file_type", chatwootAttachment.FileType).
 		Logger()
 	ctx = log.WithContext(ctx)

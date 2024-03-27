@@ -413,7 +413,7 @@ func (api *ChatwootAPI) DownloadAttachment(ctx context.Context, url string) ([]b
 	return data, err
 }
 
-func (api *ChatwootAPI) DeleteMessage(ctx context.Context, conversationID ConversationID, messageID int) error {
+func (api *ChatwootAPI) DeleteMessage(ctx context.Context, conversationID ConversationID, messageID MessageID) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, api.MakeURI(fmt.Sprintf("conversations/%d/messages/%d", conversationID, messageID)), nil)
 	if err != nil {
 		return err

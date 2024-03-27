@@ -5,6 +5,8 @@ type ConversationID int
 type AccountID int
 type InboxID int
 type MessageID int
+type AttachmentID int
+type SenderID int
 
 // Contact
 type Contact struct {
@@ -36,21 +38,21 @@ type CreateContactPayload struct {
 // Attachment
 
 type Attachment struct {
-	ID        int    `json:"id"`
-	FileType  string `json:"file_type"`
-	FileSize  int    `json:"file_size"`
-	AccountID int    `json:"account_id"`
-	DataURL   string `json:"data_url"`
-	ThumbURL  string `json:"thumb_url"`
+	ID        AttachmentID `json:"id"`
+	FileType  string       `json:"file_type"`
+	FileSize  int          `json:"file_size"`
+	AccountID AccountID    `json:"account_id"`
+	DataURL   string       `json:"data_url"`
+	ThumbURL  string       `json:"thumb_url"`
 }
 
 // Message
 
 type Sender struct {
-	ID            int    `json:"id"`
-	Name          string `json:"name"`
-	Type          string `json:"user"`
-	AvailableName string `json:"available_name"`
+	ID            SenderID `json:"id"`
+	Name          string   `json:"name"`
+	Type          string   `json:"user"`
+	AvailableName string   `json:"available_name"`
 }
 
 type Message struct {
@@ -69,8 +71,8 @@ type ConversationMeta struct {
 
 type Conversation struct {
 	ID               ConversationID    `json:"id"`
-	AccountID        int               `json:"account_id"`
-	InboxID          int               `json:"inbox_id"`
+	AccountID        AccountID         `json:"account_id"`
+	InboxID          InboxID           `json:"inbox_id"`
 	Messages         []Message         `json:"messages"`
 	Meta             ConversationMeta  `json:"meta"`
 	CustomAttributes map[string]string `json:"custom_attributes"`

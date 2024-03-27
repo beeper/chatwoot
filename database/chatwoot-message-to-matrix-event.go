@@ -57,7 +57,7 @@ func (store *Database) GetMatrixEventIDsForChatwootMessage(ctx context.Context, 
 	return eventIDs
 }
 
-func (store *Database) GetChatwootMessageIDsForMatrixEventID(ctx context.Context, matrixEventID id.EventID) (messageIDs []int, err error) {
+func (store *Database) GetChatwootMessageIDsForMatrixEventID(ctx context.Context, matrixEventID id.EventID) (messageIDs []chatwootapi.MessageID, err error) {
 	log := zerolog.Ctx(ctx)
 
 	log.Debug().Msg("getting chatwoot message IDs for matrix event ID")
@@ -72,7 +72,7 @@ func (store *Database) GetChatwootMessageIDsForMatrixEventID(ctx context.Context
 	}
 	defer rows.Close()
 
-	var messageID int
+	var messageID chatwootapi.MessageID
 	for rows.Next() {
 		if err := rows.Scan(&messageID); err == nil {
 			messageIDs = append(messageIDs, messageID)
