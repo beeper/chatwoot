@@ -4,6 +4,7 @@ type ContactID int
 type ConversationID int
 type AccountID int
 type InboxID int
+type MessageID int
 
 // Contact
 type Contact struct {
@@ -53,7 +54,7 @@ type Sender struct {
 }
 
 type Message struct {
-	ID          int          `json:"id"`
+	ID          MessageID    `json:"id"`
 	Content     *string      `json:"content"`
 	Private     bool         `json:"private"`
 	Attachments []Attachment `json:"attachments"`
@@ -92,7 +93,7 @@ type ContentAttributes struct {
 // Webhook
 
 type MessageCreated struct {
-	ID                int                `json:"id"`
+	ID                MessageID          `json:"id"`
 	Content           string             `json:"content"`
 	CreatedAt         string             `json:"created_at"`
 	MessageType       string             `json:"message_type"`

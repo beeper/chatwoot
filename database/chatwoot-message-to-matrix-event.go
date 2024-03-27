@@ -7,12 +7,14 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
 	"maunium.net/go/mautrix/id"
+
+	"github.com/beeper/chatwoot/chatwootapi"
 )
 
-func (store *Database) SetChatwootMessageIDForMatrixEvent(ctx context.Context, eventID id.EventID, chatwootMessageID int) error {
+func (store *Database) SetChatwootMessageIDForMatrixEvent(ctx context.Context, eventID id.EventID, chatwootMessageID chatwootapi.MessageID) error {
 	log := zerolog.Ctx(ctx).With().
 		Stringer("event_id", eventID).
-		Int("chatwoot_message_id", chatwootMessageID).
+		Int("chatwoot_message_id", int(chatwootMessageID)).
 		Logger()
 	ctx = log.WithContext(ctx)
 
@@ -30,8 +32,8 @@ func (store *Database) SetChatwootMessageIDForMatrixEvent(ctx context.Context, e
 	})
 }
 
-func (store *Database) GetMatrixEventIDsForChatwootMessage(ctx context.Context, chatwootMessageID int) []id.EventID {
-	log := zerolog.Ctx(ctx).With().Int("message_id", chatwootMessageID).Logger()
+func (store *Database) GetMatrixEventIDsForChatwootMessage(ctx context.Context, chatwootMessageID chatwootapi.MessageID) []id.EventID {
+	log := zerolog.Ctx(ctx).With().Int("message_id", int(chatwootMessageID)).Logger()
 	ctx = log.WithContext(ctx)
 
 	log.Debug().Msg("getting Matrix event IDs for chatwoot message")

@@ -87,7 +87,7 @@ func HandleWebhook(_ http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handleAttachment(ctx context.Context, roomID id.RoomID, chatwootMessageID int, chatwootAttachment chatwootapi.Attachment) (*mautrix.RespSendEvent, error) {
+func handleAttachment(ctx context.Context, roomID id.RoomID, chatwootMessageID chatwootapi.MessageID, chatwootAttachment chatwootapi.Attachment) (*mautrix.RespSendEvent, error) {
 	log := zerolog.Ctx(ctx).With().
 		Str("func", "handleAttachment").
 		Int("attachment_id", chatwootAttachment.ID).
@@ -239,7 +239,7 @@ type StartNewChatResp struct {
 func HandleMessageCreated(ctx context.Context, mc chatwootapi.MessageCreated) error {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "handle_message_created").
-		Int("message_id", mc.ID).
+		Int("message_id", int(mc.ID)).
 		Int("conversation_id", int(mc.Conversation.ID)).Logger()
 	ctx = log.WithContext(ctx)
 
@@ -331,13 +331,13 @@ func HandleMessageCreated(ctx context.Context, mc chatwootapi.MessageCreated) er
 
 	// Handle deletions first.
 	if mc.ContentAttributes != nil && mc.ContentAttributes.Deleted {
-		log.Info().Int("message_id", mc.ID).Msg("message deleted")
+		log.Info().Int("message_id", int(mc.ID)).Msg("message deleted")
 		var errs []error
 		for _, eventID := range eventIDs {
 			event, err := client.GetEvent(ctx, roomID, eventID)
 			if err == nil && event.Unsigned.RedactedBecause != nil {
 				// Already redacted
-				log.Info().Int("message_id", mc.ID).Msg("message was already redacted")
+				log.Info().Int("message_id", int(mc.ID)).Msg("message was already redacted")
 				continue
 			}
 			_, err = client.RedactEvent(ctx, roomID, eventID)
