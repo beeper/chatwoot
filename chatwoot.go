@@ -92,7 +92,7 @@ func main() {
 			Logger()
 	}
 
-	log.Info().Interface("configuration", configuration).Msg("Config loaded")
+	log.Info().Any("configuration", configuration).Msg("Config loaded")
 	log.Info().Msg("Chatwoot service starting...")
 	ctx := log.WithContext(context.TODO())
 

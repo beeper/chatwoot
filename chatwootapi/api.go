@@ -121,7 +121,7 @@ func (api *ChatwootAPI) CreateContact(ctx context.Context, userID id.UserID, nam
 		return 0, err
 	}
 
-	log.Debug().Interface("contact_payload", contactPayload).Msg("Got contact payload")
+	log.Debug().Any("contact_payload", contactPayload).Msg("Got contact payload")
 	return contactPayload.Payload.Contact.ID, nil
 }
 

@@ -24,7 +24,7 @@ func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMX
 		Str("component", "create_chatwoot_conversation").
 		Stringer("room_id", roomID).
 		Stringer("contact_mxid", contactMXID).
-		Interface("custom_attrs", customAttrs).
+		Any("custom_attrs", customAttrs).
 		Logger()
 	ctx = log.WithContext(ctx)
 
@@ -46,7 +46,7 @@ func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMX
 		if strings.HasPrefix(contactMXID.Localpart(), "twitter_") {
 			memberEventContent := map[string]any{}
 			if err := client.StateEvent(ctx, roomID, event.StateMember, contactMXID.String(), &memberEventContent); err == nil {
-				log.Trace().Interface("member_event_content", memberEventContent).Msg("Got member event content")
+				log.Trace().Any("member_event_content", memberEventContent).Msg("Got member event content")
 				if identifiers, ok := memberEventContent["com.beeper.bridge.identifiers"]; ok {
 					if identifiersList, ok := identifiers.([]any); ok {
 						if len(identifiersList) == 1 {
@@ -177,7 +177,7 @@ func HandleMessage(ctx context.Context, evt *event.Event) {
 	defer roomSendlocks[evt.RoomID].Unlock()
 
 	if messageIDs, err := stateStore.GetChatwootMessageIDsForMatrixEventID(ctx, evt.ID); err == nil && len(messageIDs) > 0 {
-		log.Info().Interface("message_ids", messageIDs).Msg("event already has chatwoot messages")
+		log.Info().Any("message_ids", messageIDs).Msg("event already has chatwoot messages")
 		return
 	}
 
@@ -304,7 +304,7 @@ func HandleReaction(ctx context.Context, evt *event.Event) {
 	defer roomSendlocks[evt.RoomID].Unlock()
 
 	if messageIDs, err := stateStore.GetChatwootMessageIDsForMatrixEventID(ctx, evt.ID); err == nil && len(messageIDs) > 0 {
-		log.Info().Interface("message_ids", messageIDs).Msg("event already has chatwoot messages")
+		log.Info().Any("message_ids", messageIDs).Msg("event already has chatwoot messages")
 		return
 	}
 

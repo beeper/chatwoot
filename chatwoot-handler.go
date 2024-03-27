@@ -355,7 +355,7 @@ func HandleMessageCreated(ctx context.Context, mc chatwootapi.MessageCreated) er
 	// don't try and actually process the chatwoot message.
 	if len(eventIDs) > 0 {
 		log.Info().
-			Interface("event_ids", eventIDs).
+			Any("event_ids", eventIDs).
 			Msg("chatwoot message already has matrix event ID(s)")
 		return nil
 	}
