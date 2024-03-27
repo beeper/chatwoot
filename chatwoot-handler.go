@@ -240,7 +240,7 @@ func HandleMessageCreated(ctx context.Context, mc chatwootapi.MessageCreated) er
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "handle_message_created").
 		Int("message_id", mc.ID).
-		Int("conversation_id", mc.Conversation.ID).Logger()
+		Int("conversation_id", int(mc.Conversation.ID)).Logger()
 	ctx = log.WithContext(ctx)
 
 	// Skip private messages

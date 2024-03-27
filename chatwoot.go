@@ -42,7 +42,7 @@ var chatwootConversationIDType = event.Type{
 }
 
 type ChatwootConversationIDEventContent struct {
-	ConversationID int `json:"conversation_id"`
+	ConversationID chatwootapi.ConversationID `json:"conversation_id"`
 }
 
 var VERSION = "0.2.1"
@@ -329,7 +329,7 @@ func backfillConversationForRoom(ctx context.Context, roomID id.RoomID) error {
 		}
 
 		log.Info().
-			Int("chatwoot_conversation_id", chatwootConversationID).
+			Int("chatwoot_conversation_id", int(chatwootConversationID)).
 			Msg("created Chatwoot conversation")
 		return nil
 	}
@@ -351,7 +351,7 @@ func AllowKeyShare(ctx context.Context, device *id.Device, info event.RequestedK
 		log.Info().Msg("no Chatwoot conversation found")
 		return &crypto.KeyShareRejectNoResponse
 	}
-	log = log.With().Int("conversation_id", conversationID).Logger()
+	log = log.With().Int("conversation_id", int(conversationID)).Logger()
 
 	conversation, err := chatwootAPI.GetChatwootConversation(ctx, conversationID)
 	if err != nil {

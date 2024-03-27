@@ -1,6 +1,7 @@
 package chatwootapi
 
 type ContactID int
+type ConversationID int
 
 // Contact
 type Contact struct {
@@ -64,7 +65,7 @@ type ConversationMeta struct {
 }
 
 type Conversation struct {
-	ID               int               `json:"id"`
+	ID               ConversationID    `json:"id"`
 	AccountID        int               `json:"account_id"`
 	InboxID          int               `json:"inbox_id"`
 	Messages         []Message         `json:"messages"`

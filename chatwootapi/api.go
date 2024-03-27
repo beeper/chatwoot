@@ -175,7 +175,7 @@ func (api *ChatwootAPI) ContactIDForMXID(ctx context.Context, userID id.UserID) 
 	return 0, fmt.Errorf("couldn't find user with user ID %s", query)
 }
 
-func (api *ChatwootAPI) GetChatwootConversation(ctx context.Context, conversationID int) (*Conversation, error) {
+func (api *ChatwootAPI) GetChatwootConversation(ctx context.Context, conversationID ConversationID) (*Conversation, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, api.MakeURI(fmt.Sprintf("conversations/%d", conversationID)), nil)
 	if err != nil {
 		return nil, err
@@ -222,7 +222,7 @@ func (api *ChatwootAPI) CreateConversation(ctx context.Context, sourceID string,
 	return &conversation, err
 }
 
-func (api *ChatwootAPI) GetConversationLabels(ctx context.Context, conversationID int) ([]string, error) {
+func (api *ChatwootAPI) GetConversationLabels(ctx context.Context, conversationID ConversationID) ([]string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, api.MakeURI(fmt.Sprintf("conversations/%d/labels", conversationID)), nil)
 	if err != nil {
 		return nil, err
@@ -242,7 +242,7 @@ func (api *ChatwootAPI) GetConversationLabels(ctx context.Context, conversationI
 	return labels.Payload, err
 }
 
-func (api *ChatwootAPI) SetConversationLabels(ctx context.Context, conversationID int, labels []string) error {
+func (api *ChatwootAPI) SetConversationLabels(ctx context.Context, conversationID ConversationID, labels []string) error {
 	jsonValue, err := json.Marshal(map[string]any{"labels": labels})
 	if err != nil {
 		return err
@@ -263,7 +263,7 @@ func (api *ChatwootAPI) SetConversationLabels(ctx context.Context, conversationI
 	return nil
 }
 
-func (api *ChatwootAPI) doSendTextMessage(ctx context.Context, conversationID int, jsonValues map[string]any) (*Message, error) {
+func (api *ChatwootAPI) doSendTextMessage(ctx context.Context, conversationID ConversationID, jsonValues map[string]any) (*Message, error) {
 	log := zerolog.Ctx(ctx).With().Str("component", "send_text_message").Logger()
 	jsonValue, err := json.Marshal(jsonValues)
 	if err != nil {
@@ -291,17 +291,17 @@ func (api *ChatwootAPI) doSendTextMessage(ctx context.Context, conversationID in
 	return &message, err
 }
 
-func (api *ChatwootAPI) SendTextMessage(ctx context.Context, conversationID int, content string, messageType MessageType) (*Message, error) {
+func (api *ChatwootAPI) SendTextMessage(ctx context.Context, conversationID ConversationID, content string, messageType MessageType) (*Message, error) {
 	values := map[string]any{"content": content, "message_type": messageType, "private": false}
 	return api.doSendTextMessage(ctx, conversationID, values)
 }
 
-func (api *ChatwootAPI) SendPrivateMessage(ctx context.Context, conversationID int, content string) (*Message, error) {
+func (api *ChatwootAPI) SendPrivateMessage(ctx context.Context, conversationID ConversationID, content string) (*Message, error) {
 	values := map[string]any{"content": content, "message_type": OutgoingMessage, "private": true}
 	return api.doSendTextMessage(ctx, conversationID, values)
 }
 
-func (api *ChatwootAPI) ToggleStatus(ctx context.Context, conversationID int, status ConversationStatus) error {
+func (api *ChatwootAPI) ToggleStatus(ctx context.Context, conversationID ConversationID, status ConversationStatus) error {
 	jsonValue, err := json.Marshal(map[string]any{"status": status})
 	if err != nil {
 		return err
@@ -323,7 +323,7 @@ func (api *ChatwootAPI) ToggleStatus(ctx context.Context, conversationID int, st
 
 var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
 
-func (api *ChatwootAPI) SendAttachmentMessage(ctx context.Context, conversationID int, filename string, mimeType string, fileData io.Reader, messageType MessageType) (*Message, error) {
+func (api *ChatwootAPI) SendAttachmentMessage(ctx context.Context, conversationID ConversationID, filename string, mimeType string, fileData io.Reader, messageType MessageType) (*Message, error) {
 	bodyBuf := &bytes.Buffer{}
 	bodyWriter := multipart.NewWriter(bodyBuf)
 
@@ -413,7 +413,7 @@ func (api *ChatwootAPI) DownloadAttachment(ctx context.Context, url string) ([]b
 	return data, err
 }
 
-func (api *ChatwootAPI) DeleteMessage(ctx context.Context, conversationID int, messageID int) error {
+func (api *ChatwootAPI) DeleteMessage(ctx context.Context, conversationID ConversationID, messageID int) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, api.MakeURI(fmt.Sprintf("conversations/%d/messages/%d", conversationID, messageID)), nil)
 	if err != nil {
 		return err

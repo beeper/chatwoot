@@ -7,21 +7,23 @@ import (
 
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix/id"
+
+	"github.com/beeper/chatwoot/chatwootapi"
 )
 
-func (store *Database) GetChatwootConversationIDFromMatrixRoom(ctx context.Context, roomID id.RoomID) (int, error) {
+func (store *Database) GetChatwootConversationIDFromMatrixRoom(ctx context.Context, roomID id.RoomID) (chatwootapi.ConversationID, error) {
 	row := store.DB.QueryRow(ctx, `
 		SELECT chatwoot_conversation_id
 		  FROM chatwoot_conversation_to_matrix_room
 		 WHERE matrix_room_id = $1`, roomID)
-	var chatwootConversationID int
+	var chatwootConversationID chatwootapi.ConversationID
 	if err := row.Scan(&chatwootConversationID); err != nil {
 		return -1, err
 	}
 	return chatwootConversationID, nil
 }
 
-func (store *Database) GetMatrixRoomFromChatwootConversation(ctx context.Context, conversationID int) (id.RoomID, id.EventID, error) {
+func (store *Database) GetMatrixRoomFromChatwootConversation(ctx context.Context, conversationID chatwootapi.ConversationID) (id.RoomID, id.EventID, error) {
 	row := store.DB.QueryRow(ctx, `
 		SELECT matrix_room_id, most_recent_event_id
 		  FROM chatwoot_conversation_to_matrix_room
@@ -59,10 +61,10 @@ func (store *Database) UpdateMostRecentEventIDForRoom(ctx context.Context, roomI
 	})
 }
 
-func (store *Database) UpdateConversationIDForRoom(ctx context.Context, roomID id.RoomID, conversationID int) error {
+func (store *Database) UpdateConversationIDForRoom(ctx context.Context, roomID id.RoomID, conversationID chatwootapi.ConversationID) error {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "update_conversation_id_for_room").
-		Int("conversation_id", conversationID).
+		Int("conversation_id", int(conversationID)).
 		Logger()
 	ctx = log.WithContext(ctx)
 

@@ -19,7 +19,7 @@ import (
 
 var createRoomLock sync.Mutex = sync.Mutex{}
 
-func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMXID id.UserID, customAttrs map[string]string) (int, error) {
+func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMXID id.UserID, customAttrs map[string]string) (chatwootapi.ConversationID, error) {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "create_chatwoot_conversation").
 		Stringer("room_id", roomID).
@@ -73,7 +73,7 @@ func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMX
 	if err != nil {
 		return 0, fmt.Errorf("failed to create chatwoot conversation for %s: %w", roomID, err)
 	}
-	log = log.With().Int("conversation_id", conversation.ID).Logger()
+	log = log.With().Int("conversation_id", int(conversation.ID)).Logger()
 	ctx = log.WithContext(ctx)
 
 	err = stateStore.UpdateConversationIDForRoom(ctx, roomID, conversation.ID)
@@ -221,7 +221,7 @@ func HandleMessage(ctx context.Context, evt *event.Event) {
 	}
 }
 
-func GetOrCreateChatwootConversation(ctx context.Context, roomID id.RoomID, evt *event.Event) (int, error) {
+func GetOrCreateChatwootConversation(ctx context.Context, roomID id.RoomID, evt *event.Event) (chatwootapi.ConversationID, error) {
 	log := zerolog.Ctx(ctx).With().Str("method", "GetOrCreateChatwootConversation").Logger()
 
 	conversationID, err := stateStore.GetChatwootConversationIDFromMatrixRoom(ctx, roomID)
@@ -387,10 +387,10 @@ func downloadAndDecryptMedia(ctx context.Context, content *event.MessageEventCon
 	return data, nil
 }
 
-func HandleMatrixMessageContent(ctx context.Context, evt *event.Event, conversationID int, content *event.MessageEventContent) ([]*chatwootapi.Message, error) {
+func HandleMatrixMessageContent(ctx context.Context, evt *event.Event, conversationID chatwootapi.ConversationID, content *event.MessageEventContent) ([]*chatwootapi.Message, error) {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "handle_matrix_message_content").
-		Int("conversation_id", conversationID).
+		Int("conversation_id", int(conversationID)).
 		Stringer("room_id", evt.RoomID).
 		Stringer("event_id", evt.ID).
 		Logger()
