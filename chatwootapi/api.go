@@ -263,6 +263,25 @@ func (api *ChatwootAPI) SetConversationLabels(ctx context.Context, conversationI
 	return nil
 }
 
+func (api *ChatwootAPI) SetConversationCustomAttributes(ctx context.Context, conversationID ConversationID, customAttrs map[string]string) error {
+	jsonValue, _ := json.Marshal(map[string]any{
+		"custom_attributes": customAttrs,
+	})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, api.MakeURI(fmt.Sprintf("conversations/%d/custom_attributes", conversationID)), bytes.NewBuffer(jsonValue))
+	if err != nil {
+		return err
+	}
+
+	resp, err := api.DoRequest(req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("POST conversations/%d/custom_attributes returned non-200 status code: %d", conversationID, resp.StatusCode)
+	}
+	return nil
+}
+
 func (api *ChatwootAPI) doSendTextMessage(ctx context.Context, conversationID ConversationID, jsonValues map[string]any) (*Message, error) {
 	log := zerolog.Ctx(ctx).With().Str("component", "send_text_message").Logger()
 	jsonValue, err := json.Marshal(jsonValues)

@@ -191,6 +191,7 @@ func main() {
 	})
 	syncer.OnEventType(event.EventReaction, func(ctx context.Context, evt *event.Event) {
 		ctx = addEvtContext(ctx, evt)
+
 		stateStore.UpdateMostRecentEventIDForRoom(ctx, evt.RoomID, evt.ID)
 		if VerifyFromAuthorizedUser(ctx, evt.Sender) {
 			go HandleReaction(ctx, evt)
@@ -198,6 +199,7 @@ func main() {
 	})
 	syncer.OnEventType(event.EventRedaction, func(ctx context.Context, evt *event.Event) {
 		ctx = addEvtContext(ctx, evt)
+
 		stateStore.UpdateMostRecentEventIDForRoom(ctx, evt.RoomID, evt.ID)
 		if VerifyFromAuthorizedUser(ctx, evt.Sender) {
 			go HandleRedaction(ctx, evt)
