@@ -207,14 +207,11 @@ func main() {
 	})
 
 	syncCtx, cancelSync := context.WithCancel(context.Background())
-	var syncStopWait sync.WaitGroup
-	syncStopWait.Add(1)
 
 	// Start the sync loop
 	go func() {
 		log.Debug().Msg("starting sync loop")
 		err = client.SyncWithContext(syncCtx)
-		defer syncStopWait.Done()
 		if err != nil && !errors.Is(err, context.Canceled) {
 			log.Fatal().Err(err).Msg("Sync error")
 		}
@@ -228,6 +225,7 @@ func main() {
 			return
 		}
 
+	conversationBackfillLoop:
 		for {
 			log := log.With().Str("component", "conversation_creation_backfill").Logger()
 			ctx := log.WithContext(context.Background())
@@ -265,44 +263,37 @@ func main() {
 			}
 
 			log.Info().Msg("finished creating conversations for rooms that don't have a conversation yet... waiting 24 hours to backfill again")
-			time.Sleep(24 * time.Hour)
-		}
-	}()
-
-	// Make sure to exit cleanly
-	c := make(chan os.Signal, 1)
-	signal.Notify(c,
-		syscall.SIGABRT,
-		syscall.SIGHUP,
-		syscall.SIGINT,
-		syscall.SIGQUIT,
-		syscall.SIGTERM,
-	)
-	go func() {
-		for range c { // when the process is killed
-			log.Info().Msg("Cleaning up")
-			cancelSync()
-			db.RawDB.Close()
-			os.Exit(0)
+			select {
+			case <-syncCtx.Done():
+				break conversationBackfillLoop
+			case <-time.After(24 * time.Hour):
+			}
 		}
 	}()
 
 	// Listen to the webhook
-	handler := hlog.NewHandler(*log)(hlog.RequestIDHandler("request_id", "Request-ID")(http.HandlerFunc(HandleWebhook)))
-	http.Handle("/", handler)
-	http.Handle("/webhook", handler)
-	log.Info().Int("listen_port", configuration.ListenPort).Msg("starting webhook listener")
-	err = http.ListenAndServe(fmt.Sprintf(":%d", configuration.ListenPort), nil)
-	if err != nil {
-		log.Error().Err(err).Msg("creating the webhook listener failed")
-	}
+	go func() {
+		handler := hlog.NewHandler(*log)(hlog.RequestIDHandler("request_id", "Request-ID")(http.HandlerFunc(HandleWebhook)))
+		http.Handle("/", handler)
+		http.Handle("/webhook", handler)
+		log.Info().Int("listen_port", configuration.ListenPort).Msg("starting webhook listener")
+		err = http.ListenAndServe(fmt.Sprintf(":%d", configuration.ListenPort), nil)
+		if err != nil {
+			log.Error().Err(err).Msg("creating the webhook listener failed")
+		}
+	}()
 
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGTERM, syscall.SIGINT)
+	<-c
+
+	log.Info().Msg("Cleaning up")
 	cancelSync()
-	syncStopWait.Wait()
 	err = cryptoHelper.Close()
 	if err != nil {
 		log.Error().Err(err).Msg("Error closing database")
 	}
+	db.RawDB.Close()
 }
 
 func backfillConversationForRoom(ctx context.Context, roomID id.RoomID) error {
