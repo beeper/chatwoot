@@ -187,6 +187,36 @@ func HandleMessage(ctx context.Context, evt *event.Event) {
 		return
 	}
 
+	// Asynchronously update the conversation attributes
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		conversation, err := chatwootAPI.GetChatwootConversation(ctx, conversationID)
+		if err != nil {
+			log.Err(err).Msg("failed to get conversation to update custom attributes")
+			return
+		}
+		newCustomAttributes := map[string]string{}
+		attrWhitelist := []string{
+			"reason",
+			"category",
+			"subcategory",
+			"client",
+			"network",
+			"internal_note",
+		}
+		for _, attr := range attrWhitelist {
+			if val, ok := conversation.CustomAttributes[attr]; ok {
+				newCustomAttributes[attr] = val
+			} else {
+				newCustomAttributes[attr] = ""
+			}
+		}
+		if err := chatwootAPI.SetConversationCustomAttributes(ctx, conversationID, newCustomAttributes); err != nil {
+			log.Err(err).Msg("failed to set conversation custom attributes")
+		}
+	}()
+
 	cm, err := DoRetryArr(ctx, fmt.Sprintf("handle matrix event %s in conversation %d", evt.ID, conversationID), func(context.Context) ([]*chatwootapi.Message, error) {
 		content := evt.Content.AsMessage()
 		messages, err := HandleMatrixMessageContent(ctx, evt, conversationID, content)

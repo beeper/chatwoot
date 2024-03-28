@@ -222,6 +222,25 @@ func (api *ChatwootAPI) CreateConversation(ctx context.Context, sourceID string,
 	return &conversation, err
 }
 
+func (api *ChatwootAPI) GetConversation(ctx context.Context, id ConversationID) (*Conversation, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, api.MakeURI(fmt.Sprintf("conversations/%d", id)), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := api.DoRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != 200 {
+		content, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("GET conversation returned non-200 status code: %d: %s", resp.StatusCode, content)
+	}
+
+	var conversation Conversation
+	err = json.NewDecoder(resp.Body).Decode(&conversation)
+	return &conversation, err
+}
+
 func (api *ChatwootAPI) GetConversationLabels(ctx context.Context, conversationID ConversationID) ([]string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, api.MakeURI(fmt.Sprintf("conversations/%d/labels", conversationID)), nil)
 	if err != nil {
@@ -234,7 +253,7 @@ func (api *ChatwootAPI) GetConversationLabels(ctx context.Context, conversationI
 	}
 	if resp.StatusCode != 200 {
 		content, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("POST conversations returned non-200 status code: %d: %s", resp.StatusCode, string(content))
+		return nil, fmt.Errorf("GET conversation labels returned non-200 status code: %d: %s", resp.StatusCode, content)
 	}
 
 	var labels ConversationLabelsPayload
