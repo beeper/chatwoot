@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v4.6.0
     hooks:
       - id: trailing-whitespace
         exclude_types: [markdown]
@@ -18,6 +18,7 @@ repos:
           - "-w"
       - id: go-vet-repo-mod
       - id: go-staticcheck-repo-mod
+      - id: go-mod-tidy
 
   - repo: https://github.com/beeper/pre-commit-go
     rev: v0.3.1
