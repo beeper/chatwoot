@@ -6,7 +6,7 @@ require (
 	github.com/jackc/pgx/v4 v4.18.3
 	github.com/sethvargo/go-retry v0.2.4
 	go.mau.fi/util v0.4.1
-	go.mau.fi/zeroconfig v0.1.2
+	go.mau.fi/zeroconfig v0.1.3
 	maunium.net/go/mautrix v0.18.0
 )
 
