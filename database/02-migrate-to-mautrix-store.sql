@@ -1,6 +1,7 @@
 -- v2: Migrate to mautrix crypto store
 
--- Create all of the tables from the upstream mautrix crypto store
+-- Create all of the tables from the upstream mautrix crypto store.
+-- This is only necessary for old installations of the chatwoot bot.
 
 CREATE TABLE mx_registrations (
 	user_id TEXT PRIMARY KEY
