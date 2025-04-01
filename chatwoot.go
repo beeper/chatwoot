@@ -15,7 +15,7 @@ import (
 	_ "github.com/jackc/pgx/v4/stdlib"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/hlog"
-	globallog "github.com/rs/zerolog/log"
+	globallog "github.com/rs/zerolog/log" // zerolog-allow-global-log
 	"go.mau.fi/util/dbutil"
 	"gopkg.in/yaml.v2"
 	"maunium.net/go/mautrix"
