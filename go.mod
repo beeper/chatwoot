@@ -1,14 +1,12 @@
 module github.com/beeper/chatwoot
 
-go 1.23.0
-
-toolchain go1.23.8
+go 1.24.0
 
 require (
 	github.com/jackc/pgx/v4 v4.18.3
 	github.com/sethvargo/go-retry v0.3.0
 	go.mau.fi/util v0.8.8
-	go.mau.fi/zeroconfig v0.1.3
+	go.mau.fi/zeroconfig v0.2.0
 	maunium.net/go/mautrix v0.24.2-0.20250630223442-4f6d4d7c63f3
 )
 
