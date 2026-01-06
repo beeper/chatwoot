@@ -174,21 +174,21 @@ func main() {
 	// Check if device is cross-signed and verify with recovery key if not
 	_, isVerified, err := cryptoHelper.Machine().GetOwnVerificationStatus(ctx)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to check verification status")
-	}
-	if !isVerified {
+		log.Error().Err(err).Msg("Failed to check verification status")
+	} else if !isVerified {
 		recoveryKey, err := configuration.GetRecoveryKey(log)
 		if err != nil {
-			log.Fatal().Err(err).Str("recovery_key_file", configuration.RecoveryKeyFile).Msg("Could not read recovery key")
+			log.Error().Err(err).Str("recovery_key_file", configuration.RecoveryKeyFile).Msg("Could not read recovery key")
+		} else if recoveryKey == "" {
+			log.Error().Msg("Device is not verified and no recovery key file configured. Set recovery_key_file in config to enable cross-signing verification.")
+		} else {
+			err = cryptoHelper.Machine().VerifyWithRecoveryKey(ctx, recoveryKey)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to verify device with recovery key")
+			} else {
+				log.Info().Msg("Successfully verified device with recovery key")
+			}
 		}
-		if recoveryKey == "" {
-			log.Fatal().Msg("Device is not verified and no recovery key file configured. Set recovery_key_file in config to enable cross-signing verification.")
-		}
-		err = cryptoHelper.Machine().VerifyWithRecoveryKey(ctx, recoveryKey)
-		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to verify device with recovery key")
-		}
-		log.Info().Msg("Successfully verified device with recovery key")
 	} else {
 		log.Info().Msg("Device is already verified")
 	}
