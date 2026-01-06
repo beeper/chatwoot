@@ -30,9 +30,10 @@ type StartNewChat struct {
 
 type Configuration struct {
 	// Authentication settings
-	Homeserver   string    `yaml:"homeserver"`
-	Username     id.UserID `yaml:"username"`
-	PasswordFile string    `yaml:"password_file"`
+	Homeserver      string    `yaml:"homeserver"`
+	Username        id.UserID `yaml:"username"`
+	PasswordFile    string    `yaml:"password_file"`
+	RecoveryKeyFile string    `yaml:"recovery_key_file"`
 
 	// Chatwoot Authentication
 	ChatwootBaseUrl         string                `yaml:"chatwoot_base_url"`
@@ -72,6 +73,18 @@ func (c *Configuration) GetPassword(log *zerolog.Logger) (string, error) {
 func (c *Configuration) GetChatwootAccessToken(log *zerolog.Logger) (string, error) {
 	log.Debug().Str("access_token_file", c.ChatwootAccessTokenFile).Msg("reading access token from file")
 	buf, err := os.ReadFile(c.ChatwootAccessTokenFile)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(buf)), nil
+}
+
+func (c *Configuration) GetRecoveryKey(log *zerolog.Logger) (string, error) {
+	if c.RecoveryKeyFile == "" {
+		return "", nil
+	}
+	log.Debug().Str("recovery_key_file", c.RecoveryKeyFile).Msg("reading recovery key from file")
+	buf, err := os.ReadFile(c.RecoveryKeyFile)
 	if err != nil {
 		return "", err
 	}
