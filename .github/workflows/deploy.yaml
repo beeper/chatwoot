@@ -6,7 +6,7 @@ on:
     branches: [ master ]
 
 env:
-  GO_VERSION: "1.22"
+  GO_VERSION: "1.24"
   CI_REGISTRY_IMAGE: "${{ secrets.CI_REGISTRY }}/chatwoot"
   GHCR_REGISTRY: ghcr.io
   GHCR_REGISTRY_IMAGE: "ghcr.io/${{ github.repository }}"

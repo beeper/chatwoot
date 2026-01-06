@@ -13,3 +13,5 @@ passwordfile
 accesstokenfile
 .envrc.user
 result
+
+.idea/
