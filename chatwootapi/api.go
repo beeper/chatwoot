@@ -15,7 +15,6 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
-	"maunium.net/go/mautrix/id"
 )
 
 type MessageType string
@@ -74,27 +73,17 @@ func (api *ChatwootAPI) MakeURI(endpoint string) string {
 	return url.String()
 }
 
-func (api *ChatwootAPI) CreateContact(ctx context.Context, userID id.UserID, name string) (ContactID, error) {
+func (api *ChatwootAPI) CreateContact(ctx context.Context, identifier string) (ContactID, error) {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "create_contact").
-		Stringer("user_id", userID).
+		Str("identifier", identifier).
 		Logger()
 
-	if name == "" {
-		name = userID.String()
-		if userID.Homeserver() == "beeper.local" && strings.HasPrefix(userID.Localpart(), "imessagego_1.") {
-			decoded, err := id.DecodeUserLocalpart(strings.TrimPrefix(userID.Localpart(), "imessagego_1."))
-			if err == nil {
-				name = decoded
-			}
-		}
-	}
-
-	log.Info().Str("name", name).Msg("Creating contact")
+	log.Info().Msg("Creating contact")
 	payload := CreateContactPayload{
 		InboxID:    api.InboxID,
-		Name:       name,
-		Identifier: name,
+		Name:       identifier,
+		Identifier: identifier,
 	}
 	jsonValue, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, api.MakeURI("contacts"), bytes.NewBuffer(jsonValue))
@@ -109,10 +98,8 @@ func (api *ChatwootAPI) CreateContact(ctx context.Context, userID id.UserID, nam
 		return 0, err
 	}
 	if resp.StatusCode != 200 {
-		data, err := io.ReadAll(resp.Body)
-		if err == nil {
-			log.Error().Str("data", string(data)).Msg("got non-200 status code")
-		}
+		data, _ := io.ReadAll(resp.Body)
+		log.Error().Str("data", string(data)).Int("status", resp.StatusCode).Msg("failed to create contact")
 		return 0, fmt.Errorf("POST contacts returned non-200 status code: %d", resp.StatusCode)
 	}
 
@@ -125,20 +112,9 @@ func (api *ChatwootAPI) CreateContact(ctx context.Context, userID id.UserID, nam
 	return contactPayload.Payload.Contact.ID, nil
 }
 
-func (api *ChatwootAPI) ContactIDForMXID(ctx context.Context, userID id.UserID) (ContactID, error) {
+func (api *ChatwootAPI) ContactIDForIdentifier(ctx context.Context, identifier string) (ContactID, error) {
 	log := zerolog.Ctx(ctx)
-	query := userID.String()
-	if userID.Homeserver() == "beeper.local" {
-		// Special handling for bridged iMessages.
-		if strings.HasPrefix(userID.Localpart(), "imessagego_1.") {
-			decoded, err := id.DecodeUserLocalpart(strings.TrimPrefix(userID.Localpart(), "imessagego_1."))
-			if err == nil {
-				query = decoded
-			}
-		}
-	}
-
-	log.Info().Str("query", query).Msg("Searching for contact")
+	log.Info().Str("query", identifier).Msg("Searching for contact")
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, api.MakeURI("contacts/search"), nil)
 	if err != nil {
@@ -146,7 +122,7 @@ func (api *ChatwootAPI) ContactIDForMXID(ctx context.Context, userID id.UserID) 
 	}
 
 	q := req.URL.Query()
-	q.Add("q", query)
+	q.Add("q", identifier)
 	req.URL.RawQuery = q.Encode()
 
 	resp, err := api.DoRequest(req)
@@ -163,16 +139,16 @@ func (api *ChatwootAPI) ContactIDForMXID(ctx context.Context, userID id.UserID) 
 	}
 
 	for _, contact := range contactsPayload.Payload {
-		if contact.Identifier == query {
+		if contact.Identifier == identifier {
 			return contact.ID, nil
-		} else if contact.Email == query {
+		} else if contact.Email == identifier {
 			return contact.ID, nil
-		} else if contact.PhoneNumber == query {
+		} else if contact.PhoneNumber == identifier {
 			return contact.ID, nil
 		}
 	}
 
-	return 0, fmt.Errorf("couldn't find user with user ID %s", query)
+	return 0, fmt.Errorf("couldn't find user with identifier %s", identifier)
 }
 
 func (api *ChatwootAPI) GetChatwootConversation(ctx context.Context, conversationID ConversationID) (*Conversation, error) {

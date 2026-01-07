@@ -19,6 +19,38 @@ import (
 
 var createRoomLock sync.Mutex = sync.Mutex{}
 
+// getContactIdentifier returns the identifier to use for a contact in Chatwoot.
+// For Twitter users, this is the Twitter handle. For others, it falls back to the MXID.
+func getContactIdentifier(ctx context.Context, roomID id.RoomID, contactMXID id.UserID) string {
+	log := zerolog.Ctx(ctx)
+
+	// Special handling for Twitter users - use the Twitter handle
+	if strings.HasPrefix(contactMXID.Localpart(), "twitter_") {
+		memberEventContent := map[string]any{}
+		if err := client.StateEvent(ctx, roomID, event.StateMember, contactMXID.String(), &memberEventContent); err == nil {
+			log.Trace().Any("member_event_content", memberEventContent).Msg("Got member event content")
+			if identifiers, ok := memberEventContent["com.beeper.bridge.identifiers"]; ok {
+				if identifiersList, ok := identifiers.([]any); ok {
+					if len(identifiersList) == 1 {
+						if identifier, ok := identifiersList[0].(string); ok {
+							return "@" + strings.TrimPrefix(identifier, "twitter:")
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Special handling for iMessage bridges
+	if contactMXID.Homeserver() == "beeper.local" && strings.HasPrefix(contactMXID.Localpart(), "imessagego_1.") {
+		if decoded, err := id.DecodeUserLocalpart(strings.TrimPrefix(contactMXID.Localpart(), "imessagego_1.")); err == nil {
+			return decoded
+		}
+	}
+
+	return contactMXID.String()
+}
+
 func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMXID id.UserID, customAttrs map[string]string) (chatwootapi.ConversationID, error) {
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "create_chatwoot_conversation").
@@ -37,29 +69,16 @@ func createChatwootConversation(ctx context.Context, roomID id.RoomID, contactMX
 		return conversationID, nil
 	}
 
-	contactID, err := chatwootAPI.ContactIDForMXID(ctx, contactMXID)
+	// Get the identifier to use for this contact (Twitter handle, iMessage identifier, or MXID)
+	contactIdentifier := getContactIdentifier(ctx, roomID, contactMXID)
+	log = log.With().Str("contact_identifier", contactIdentifier).Logger()
+	ctx = log.WithContext(ctx)
+
+	contactID, err := chatwootAPI.ContactIDForIdentifier(ctx, contactIdentifier)
 	if err != nil {
 		log.Warn().Err(err).Msg("contact ID not found for user, will attempt to create one")
 
-		// Special handling for Twitter user names
-		contactName := ""
-		if strings.HasPrefix(contactMXID.Localpart(), "twitter_") {
-			memberEventContent := map[string]any{}
-			if err := client.StateEvent(ctx, roomID, event.StateMember, contactMXID.String(), &memberEventContent); err == nil {
-				log.Trace().Any("member_event_content", memberEventContent).Msg("Got member event content")
-				if identifiers, ok := memberEventContent["com.beeper.bridge.identifiers"]; ok {
-					if identifiersList, ok := identifiers.([]any); ok {
-						if len(identifiersList) == 1 {
-							if identifier, ok := identifiersList[0].(string); ok {
-								contactName = "@" + strings.TrimPrefix(identifier, "twitter:")
-							}
-						}
-					}
-				}
-			}
-		}
-
-		contactID, err = chatwootAPI.CreateContact(ctx, contactMXID, contactName)
+		contactID, err = chatwootAPI.CreateContact(ctx, contactIdentifier)
 		if err != nil {
 			return 0, fmt.Errorf("create contact failed for %s: %w", contactMXID, err)
 		}
