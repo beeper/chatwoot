@@ -115,6 +115,7 @@ func main() {
 		log.Fatal().Err(err).Msg("Failed to create matrix client")
 	}
 	client.Log = *log
+	client.UserAgent = "chatwoot-bot/" + VERSION + " " + mautrix.DefaultUserAgent
 
 	accessToken, err := configuration.GetChatwootAccessToken(log)
 	if err != nil {
