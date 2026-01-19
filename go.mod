@@ -5,15 +5,15 @@ go 1.24.0
 require (
 	github.com/jackc/pgx/v4 v4.18.3
 	github.com/sethvargo/go-retry v0.3.0
-	go.mau.fi/util v0.9.4
+	go.mau.fi/util v0.9.5
 	go.mau.fi/zeroconfig v0.2.0
 	maunium.net/go/mautrix v0.26.1
 )
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
-	github.com/mattn/go-sqlite3 v1.14.32 // indirect
-	github.com/petermattis/goid v0.0.0-20251121121749-a11dd1a45f9a // indirect
+	github.com/mattn/go-sqlite3 v1.14.33 // indirect
+	github.com/petermattis/goid v0.0.0-20260113132338-7c7de50cc741 // indirect
 )
 
 require (
@@ -34,11 +34,11 @@ require (
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/yuin/goldmark v1.7.13 // indirect
-	golang.org/x/crypto v0.46.0 // indirect
-	golang.org/x/exp v0.0.0-20251209150349-8475f28825e9 // indirect
-	golang.org/x/net v0.48.0 // indirect
-	golang.org/x/sys v0.39.0 // indirect
-	golang.org/x/text v0.32.0 // indirect
+	golang.org/x/crypto v0.47.0 // indirect
+	golang.org/x/exp v0.0.0-20260112195511-716be5621a96 // indirect
+	golang.org/x/net v0.49.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
+	golang.org/x/text v0.33.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0
 )
